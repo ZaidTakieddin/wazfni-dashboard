@@ -1,39 +1,41 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { GridColDef, GridActionsCellItem } from '@mui/x-data-grid';
+import type { Company } from 'src/types/approval';
+import type { GridColDef } from '@mui/x-data-grid';
+
+import { useMemo, useState } from 'react';
 
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
 import Button from '@mui/material/Button';
 import Avatar from '@mui/material/Avatar';
+import Dialog from '@mui/material/Dialog';
+import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import LoadingButton from '@mui/lab/LoadingButton';
-import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
+import { GridActionsCellItem } from '@mui/x-data-grid';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
-import TextField from '@mui/material/TextField';
 
 import { paths } from 'src/routes/paths';
 import { useRouter } from 'src/routes/hooks';
 
-import { Label } from 'src/components/label';
-import { Iconify } from 'src/components/iconify';
-import { EmptyContent } from 'src/components/empty-content';
-import { LoadingScreen } from 'src/components/loading-screen';
-import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
-import { ConfirmDialog } from 'src/components/custom-dialog';
-import CustomDataGrid from 'src/components/data-grid/custom-datagrid';
-
-import type { Company } from 'src/types/approval';
+import { DashboardContent } from 'src/layouts/dashboard';
 import {
-  usePendingCompanies,
-  useApproveCompany,
   useRejectCompany,
+  useApproveCompany,
+  usePendingCompanies,
 } from 'src/lib/hooks/use-approval';
 
-import { DashboardContent } from 'src/layouts/dashboard';
+import { Label } from 'src/components/label';
+import { toast } from 'src/components/snackbar';
+import { Iconify } from 'src/components/iconify';
+import { EmptyContent } from 'src/components/empty-content';
+import { ConfirmDialog } from 'src/components/custom-dialog';
+import { LoadingScreen } from 'src/components/loading-screen';
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
+import CustomDataGrid from 'src/components/data-grid/custom-datagrid';
 
 // ----------------------------------------------------------------------
 
@@ -68,17 +70,25 @@ export default function PendingCompaniesPage() {
 
     try {
       await approveCompanyMutation.mutateAsync(selectedCompany.id);
-      console.log('Company approved successfully!');
+
+      toast.success(
+        `${selectedCompany.name} has been approved successfully! They can now post jobs.`
+      );
       setApproveConfirmOpen(false);
       setSelectedCompany(null);
-    } catch (error: any) {
-      console.error('Failed to approve company:', error?.message || error);
+    } catch (approveError: any) {
+      console.error('Failed to approve company:', approveError);
+      const errorMessage =
+        approveError?.response?.data?.message ||
+        approveError?.message ||
+        'Failed to approve company';
+      toast.error(`Approval failed: ${errorMessage}`);
     }
   };
 
   const confirmReject = async () => {
     if (!selectedCompany || !rejectionReason.trim()) {
-      console.warn('Please provide a rejection reason');
+      toast.warning('Please provide a rejection reason');
       return;
     }
 
@@ -87,12 +97,18 @@ export default function PendingCompaniesPage() {
         companyId: selectedCompany.id,
         data: { rejectionReason },
       });
-      console.log('Company rejected successfully!');
+
+      toast.success(
+        `${selectedCompany.name} has been rejected. They have been notified with the reason.`
+      );
       setRejectDialogOpen(false);
       setRejectionReason('');
       setSelectedCompany(null);
-    } catch (error: any) {
-      console.error('Failed to reject company:', error?.message || error);
+    } catch (rejectError: any) {
+      console.error('Failed to reject company:', rejectError);
+      const errorMessage =
+        rejectError?.response?.data?.message || rejectError?.message || 'Failed to reject company';
+      toast.error(`Rejection failed: ${errorMessage}`);
     }
   };
 
@@ -183,7 +199,7 @@ export default function PendingCompaniesPage() {
               selectedCompany?.id === params.row.id &&
               params.row.approvalStatus === 'PENDING'
             }
-            showInMenu={true}
+            showInMenu
           />,
           <GridActionsCellItem
             icon={<Iconify icon="eva:close-fill" />}
@@ -194,7 +210,7 @@ export default function PendingCompaniesPage() {
               selectedCompany?.id === params.row.id &&
               params.row.approvalStatus === 'PENDING'
             }
-            showInMenu={true}
+            showInMenu
           />,
         ],
       },
@@ -272,6 +288,7 @@ export default function PendingCompaniesPage() {
             color="success"
             onClick={confirmApprove}
             loading={approveCompanyMutation.isPending}
+            startIcon={<Iconify icon="eva:checkmark-fill" />}
           >
             Approve Company
           </LoadingButton>
@@ -321,6 +338,7 @@ export default function PendingCompaniesPage() {
             color="error"
             onClick={confirmReject}
             loading={rejectCompanyMutation.isPending}
+            startIcon={<Iconify icon="eva:close-fill" />}
           >
             Reject Company
           </LoadingButton>

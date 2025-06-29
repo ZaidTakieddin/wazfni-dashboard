@@ -1,36 +1,37 @@
 'use client';
 
-import { GridActionsCellItem, GridColDef } from '@mui/x-data-grid';
+import type { Job } from 'src/types/approval';
+import type { GridColDef } from '@mui/x-data-grid';
+
 import { useMemo, useState } from 'react';
 
-import LoadingButton from '@mui/lab/LoadingButton';
-import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import Chip from '@mui/material/Chip';
+import { Stack } from '@mui/material';
+import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import LoadingButton from '@mui/lab/LoadingButton';
+import DialogTitle from '@mui/material/DialogTitle';
+import { GridActionsCellItem } from '@mui/x-data-grid';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
 
-import { useRouter } from 'src/routes/hooks';
 import { paths } from 'src/routes/paths';
+import { useRouter } from 'src/routes/hooks';
 
-import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
-import { ConfirmDialog } from 'src/components/custom-dialog';
-import CustomDataGrid from 'src/components/data-grid/custom-datagrid';
-import { EmptyContent } from 'src/components/empty-content';
-import { Iconify } from 'src/components/iconify';
-import { Label } from 'src/components/label';
-import { LoadingScreen } from 'src/components/loading-screen';
-
-import { useApproveJob, usePendingJobs, useRejectJob } from 'src/lib/hooks/use-approval';
-import type { Job } from 'src/types/approval';
-
-import { Stack } from '@mui/material';
 import { DashboardContent } from 'src/layouts/dashboard';
+import { useRejectJob, useApproveJob, usePendingJobs } from 'src/lib/hooks/use-approval';
+
+import { Label } from 'src/components/label';
+import { toast } from 'src/components/snackbar';
+import { Iconify } from 'src/components/iconify';
+import { EmptyContent } from 'src/components/empty-content';
+import { ConfirmDialog } from 'src/components/custom-dialog';
+import { LoadingScreen } from 'src/components/loading-screen';
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
+import CustomDataGrid from 'src/components/data-grid/custom-datagrid';
 
 // ----------------------------------------------------------------------
 
@@ -65,17 +66,23 @@ export default function PendingJobsPage() {
 
     try {
       await approveJobMutation.mutateAsync(selectedJob.id);
-      console.log('Job approved successfully!');
+
+      toast.success(
+        `Job "${selectedJob.jobTitle}" has been approved successfully! It's now visible to all users.`
+      );
       setApproveConfirmOpen(false);
       setSelectedJob(null);
-    } catch (error: any) {
-      console.error('Failed to approve job:', error?.message || error);
+    } catch (approveError: any) {
+      console.error('Failed to approve job:', approveError);
+      const errorMessage =
+        approveError?.response?.data?.message || approveError?.message || 'Failed to approve job';
+      toast.error(`Approval failed: ${errorMessage}`);
     }
   };
 
   const confirmReject = async () => {
     if (!selectedJob || !rejectionReason.trim()) {
-      console.warn('Please provide a rejection reason');
+      toast.warning('Please provide a rejection reason');
       return;
     }
 
@@ -84,12 +91,18 @@ export default function PendingJobsPage() {
         jobId: selectedJob.id,
         data: { rejectionReason },
       });
-      console.log('Job rejected successfully!');
+
+      toast.success(
+        `Job "${selectedJob.jobTitle}" has been rejected. The company has been notified.`
+      );
       setRejectDialogOpen(false);
       setRejectionReason('');
       setSelectedJob(null);
-    } catch (error: any) {
-      console.error('Failed to reject job:', error?.message || error);
+    } catch (rejectError: any) {
+      console.error('Failed to reject job:', rejectError);
+      const errorMessage =
+        rejectError?.response?.data?.message || rejectError?.message || 'Failed to reject job';
+      toast.error(`Rejection failed: ${errorMessage}`);
     }
   };
 
@@ -206,7 +219,7 @@ export default function PendingJobsPage() {
               selectedJob?.id === params.row.id &&
               params.row.approvalStatus === 'PENDING'
             }
-            showInMenu={true}
+            showInMenu
           />,
           <GridActionsCellItem
             icon={<Iconify icon="eva:close-fill" />}
@@ -217,7 +230,7 @@ export default function PendingJobsPage() {
               selectedJob?.id === params.row.id &&
               params.row.approvalStatus === 'PENDING'
             }
-            showInMenu={true}
+            showInMenu
           />,
         ],
       },
@@ -295,6 +308,7 @@ export default function PendingJobsPage() {
             color="success"
             onClick={confirmApprove}
             loading={approveJobMutation.isPending}
+            startIcon={<Iconify icon="eva:checkmark-fill" />}
           >
             Approve Job
           </LoadingButton>
@@ -344,6 +358,7 @@ export default function PendingJobsPage() {
             color="error"
             onClick={confirmReject}
             loading={rejectJobMutation.isPending}
+            startIcon={<Iconify icon="eva:close-fill" />}
           >
             Reject Job
           </LoadingButton>
