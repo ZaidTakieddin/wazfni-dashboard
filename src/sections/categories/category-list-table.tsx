@@ -5,10 +5,20 @@ import type { Category } from 'src/types/category';
 
 import { useState, useCallback } from 'react';
 
-import { Box, Chip, Tooltip, IconButton, Typography, CircularProgress } from '@mui/material';
+import {
+  Box,
+  Chip,
+  Stack,
+  Button,
+  Tooltip,
+  IconButton,
+  Typography,
+  CircularProgress,
+} from '@mui/material';
 
 import { useCategories, useDeleteCategory } from 'src/lib/hooks/use-categories';
 
+import { toast } from 'src/components/snackbar';
 import { Iconify } from 'src/components/iconify';
 import { ConfirmDialog } from 'src/components/custom-dialog';
 import CustomDataGrid from 'src/components/data-grid/custom-datagrid';
@@ -36,12 +46,24 @@ export function CategoryListTable() {
     if (!deletingCategoryId) return;
 
     try {
+      const category = categories.find((c) => c.id === deletingCategoryId);
+      const categoryName = category?.name || 'Category';
+
       await deleteCategory.mutateAsync(deletingCategoryId);
       setDeletingCategoryId(null);
-    } catch (err) {
-      console.error('Failed to delete category:', err);
+
+      toast.success(`${categoryName} has been deleted successfully!`);
+    } catch (deleteError: any) {
+      console.error('Failed to delete category:', deleteError);
+      const errorMessage =
+        deleteError?.response?.data?.message || deleteError?.message || 'Failed to delete category';
+      toast.error(`Delete failed: ${errorMessage}`);
     }
-  }, [deletingCategoryId, deleteCategory]);
+  }, [deletingCategoryId, deleteCategory, categories]);
+
+  const handleCancelDelete = useCallback(() => {
+    setDeletingCategoryId(null);
+  }, []);
 
   const columns: GridColDef<Category>[] = [
     {
@@ -155,20 +177,46 @@ export function CategoryListTable() {
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog
         open={!!deletingCategoryId}
-        onClose={() => setDeletingCategoryId(null)}
+        onClose={handleCancelDelete}
         title="Delete Category"
-        content="Are you sure you want to delete this category? This action cannot be undone."
+        content={
+          <Box>
+            <Typography variant="body1" sx={{ mb: 2 }}>
+              Are you sure you want to delete this category? This action cannot be undone.
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              This will also delete all associated subcategories and may affect jobs linked to this
+              category.
+            </Typography>
+          </Box>
+        }
         action={
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <IconButton onClick={() => setDeletingCategoryId(null)}>Cancel</IconButton>
-            <IconButton
+          <Stack direction="row" spacing={1.5} sx={{ width: '100%' }}>
+            <Button
+              variant="outlined"
+              onClick={handleCancelDelete}
+              disabled={deleteCategory.isPending}
+              sx={{ flex: 1 }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
               color="error"
               onClick={handleConfirmDelete}
               disabled={deleteCategory.isPending}
+              startIcon={
+                deleteCategory.isPending ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : (
+                  <Iconify icon="solar:trash-bin-trash-bold" width={16} />
+                )
+              }
+              sx={{ flex: 1 }}
             >
-              {deleteCategory.isPending ? <CircularProgress size={20} /> : 'Delete'}
-            </IconButton>
-          </Box>
+              {deleteCategory.isPending ? 'Deleting...' : 'Delete Category'}
+            </Button>
+          </Stack>
         }
       />
     </>

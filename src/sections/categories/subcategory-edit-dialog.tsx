@@ -18,6 +18,7 @@ import {
 
 import { useUpdateSubcategory } from 'src/lib/hooks/use-categories';
 
+import { toast } from 'src/components/snackbar';
 import { Form, Field } from 'src/components/hook-form';
 
 // ----------------------------------------------------------------------
@@ -57,10 +58,16 @@ export function SubcategoryEditDialog({ subcategory, open, onClose }: Props) {
         data: updateData,
       });
 
+      toast.success(`Subcategory "${data.name}" has been updated successfully!`);
       reset();
       onClose();
-    } catch (error) {
-      console.error('Failed to update subcategory:', error);
+    } catch (updateError: any) {
+      console.error('Failed to update subcategory:', updateError);
+      const errorMessage =
+        updateError?.response?.data?.message ||
+        updateError?.message ||
+        'Failed to update subcategory';
+      toast.error(`Update failed: ${errorMessage}`);
     }
   });
 

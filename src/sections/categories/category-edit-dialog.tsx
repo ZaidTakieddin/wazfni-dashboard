@@ -18,6 +18,7 @@ import {
 
 import { useUpdateCategory } from 'src/lib/hooks/use-categories';
 
+import { toast } from 'src/components/snackbar';
 import { Form, Field } from 'src/components/hook-form';
 
 // ----------------------------------------------------------------------
@@ -60,10 +61,14 @@ export function CategoryEditDialog({ category, open, onClose }: Props) {
         data: updateData,
       });
 
+      toast.success(`Category "${data.name}" has been updated successfully!`);
       reset();
       onClose();
-    } catch (error) {
-      console.error('Failed to update category:', error);
+    } catch (updateError: any) {
+      console.error('Failed to update category:', updateError);
+      const errorMessage =
+        updateError?.response?.data?.message || updateError?.message || 'Failed to update category';
+      toast.error(`Update failed: ${errorMessage}`);
     }
   });
 

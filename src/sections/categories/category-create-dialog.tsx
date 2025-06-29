@@ -18,6 +18,7 @@ import {
 
 import { useCreateCategory } from 'src/lib/hooks/use-categories';
 
+import { toast } from 'src/components/snackbar';
 import { Form, Field } from 'src/components/hook-form';
 
 // ----------------------------------------------------------------------
@@ -56,10 +57,14 @@ export function CategoryCreateDialog({ open, onClose }: Props) {
 
       await createCategory.mutateAsync(createData);
 
+      toast.success(`Category "${data.name}" has been created successfully!`);
       reset();
       onClose();
-    } catch (error) {
-      console.error('Failed to create category:', error);
+    } catch (createError: any) {
+      console.error('Failed to create category:', createError);
+      const errorMessage =
+        createError?.response?.data?.message || createError?.message || 'Failed to create category';
+      toast.error(`Creation failed: ${errorMessage}`);
     }
   });
 

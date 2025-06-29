@@ -8,7 +8,9 @@ import { useMemo, useState, useCallback } from 'react';
 import {
   Box,
   Chip,
+  Stack,
   Select,
+  Button,
   Tooltip,
   MenuItem,
   IconButton,
@@ -24,6 +26,7 @@ import {
   useSubcategoriesByCategory,
 } from 'src/lib/hooks/use-categories';
 
+import { toast } from 'src/components/snackbar';
 import { Iconify } from 'src/components/iconify';
 import { ConfirmDialog } from 'src/components/custom-dialog';
 import CustomDataGrid from 'src/components/data-grid/custom-datagrid';
@@ -58,12 +61,26 @@ export function SubcategoryListTable() {
     if (!deletingSubcategoryId) return;
 
     try {
+      const subcategory = subcategories.find((s) => s.id === deletingSubcategoryId);
+      const subcategoryName = subcategory?.name || 'Subcategory';
+
       await deleteSubcategory.mutateAsync(deletingSubcategoryId);
       setDeletingSubcategoryId(null);
-    } catch (err) {
-      console.error('Failed to delete subcategory:', err);
+
+      toast.success(`${subcategoryName} has been deleted successfully!`);
+    } catch (deleteError: any) {
+      console.error('Failed to delete subcategory:', deleteError);
+      const errorMessage =
+        deleteError?.response?.data?.message ||
+        deleteError?.message ||
+        'Failed to delete subcategory';
+      toast.error(`Delete failed: ${errorMessage}`);
     }
-  }, [deletingSubcategoryId, deleteSubcategory]);
+  }, [deletingSubcategoryId, deleteSubcategory, subcategories]);
+
+  const handleCancelDelete = useCallback(() => {
+    setDeletingSubcategoryId(null);
+  }, []);
 
   const columns: GridColDef<Subcategory>[] = useMemo(
     () => [
@@ -220,20 +237,45 @@ export function SubcategoryListTable() {
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog
         open={!!deletingSubcategoryId}
-        onClose={() => setDeletingSubcategoryId(null)}
+        onClose={handleCancelDelete}
         title="Delete Subcategory"
-        content="Are you sure you want to delete this subcategory? This action cannot be undone."
+        content={
+          <Box>
+            <Typography variant="body1" sx={{ mb: 2 }}>
+              Are you sure you want to delete this subcategory? This action cannot be undone.
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              This may affect jobs that are linked to this subcategory.
+            </Typography>
+          </Box>
+        }
         action={
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <IconButton onClick={() => setDeletingSubcategoryId(null)}>Cancel</IconButton>
-            <IconButton
+          <Stack direction="row" spacing={1.5} sx={{ width: '100%' }}>
+            <Button
+              variant="outlined"
+              onClick={handleCancelDelete}
+              disabled={deleteSubcategory.isPending}
+              sx={{ flex: 1 }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
               color="error"
               onClick={handleConfirmDelete}
               disabled={deleteSubcategory.isPending}
+              startIcon={
+                deleteSubcategory.isPending ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : (
+                  <Iconify icon="solar:trash-bin-trash-bold" width={16} />
+                )
+              }
+              sx={{ flex: 1 }}
             >
-              {deleteSubcategory.isPending ? <CircularProgress size={20} /> : 'Delete'}
-            </IconButton>
-          </Box>
+              {deleteSubcategory.isPending ? 'Deleting...' : 'Delete Subcategory'}
+            </Button>
+          </Stack>
         }
       />
     </>

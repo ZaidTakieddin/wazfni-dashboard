@@ -19,6 +19,7 @@ import {
 
 import { useCategories, useCreateSubcategory } from 'src/lib/hooks/use-categories';
 
+import { toast } from 'src/components/snackbar';
 import { Form, Field } from 'src/components/hook-form';
 
 // ----------------------------------------------------------------------
@@ -60,10 +61,21 @@ export function SubcategoryCreateDialog({ open, onClose }: Props) {
         data: createData,
       });
 
+      const selectedCategory = categories.find((c) => c.id === data.categoryId);
+      const categoryName = selectedCategory?.name || 'category';
+
+      toast.success(
+        `Subcategory "${data.name}" has been created successfully under ${categoryName}!`
+      );
       reset();
       onClose();
-    } catch (error) {
-      console.error('Failed to create subcategory:', error);
+    } catch (createError: any) {
+      console.error('Failed to create subcategory:', createError);
+      const errorMessage =
+        createError?.response?.data?.message ||
+        createError?.message ||
+        'Failed to create subcategory';
+      toast.error(`Creation failed: ${errorMessage}`);
     }
   });
 
