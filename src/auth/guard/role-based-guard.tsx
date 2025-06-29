@@ -1,57 +1,134 @@
 'use client';
 
-import type { Theme, SxProps } from '@mui/material/styles';
+import type { ReactNode } from 'react';
 
-import { m } from 'framer-motion';
+import { Box, Container, Typography } from '@mui/material';
 
-import Container from '@mui/material/Container';
-import Typography from '@mui/material/Typography';
+import { Iconify } from 'src/components/iconify';
 
-import { ForbiddenIllustration } from 'src/assets/illustrations';
-
-import { varBounce, MotionContainer } from 'src/components/animate';
+import { useAuthContext } from '../hooks';
 
 // ----------------------------------------------------------------------
 
-export type RoleBasedGuardProp = {
-  sx?: SxProps<Theme>;
-  currentRole: string;
-  hasContent?: boolean;
-  acceptRoles: string[];
-  children: React.ReactNode;
+type Props = {
+  children: ReactNode;
+  requiredRoles?: ('USER' | 'ADMIN' | 'COMPANY')[];
+  requiredPermissions?: string[];
+  fallback?: ReactNode;
 };
 
 export function RoleBasedGuard({
-  sx,
   children,
-  hasContent,
-  currentRole,
-  acceptRoles,
-}: RoleBasedGuardProp) {
-  if (typeof acceptRoles !== 'undefined' && !acceptRoles.includes(currentRole)) {
-    return hasContent ? (
-      <Container
-        component={MotionContainer}
-        sx={[{ textAlign: 'center' }, ...(Array.isArray(sx) ? sx : [sx])]}
-      >
-        <m.div variants={varBounce('in')}>
-          <Typography variant="h3" sx={{ mb: 2 }}>
-            Permission denied
-          </Typography>
-        </m.div>
+  requiredRoles = [],
+  requiredPermissions = [],
+  fallback,
+}: Props) {
+  const { user, authenticated, permissions } = useAuthContext();
 
-        <m.div variants={varBounce('in')}>
-          <Typography sx={{ color: 'text.secondary' }}>
-            You do not have permission to access this page.
-          </Typography>
-        </m.div>
-
-        <m.div variants={varBounce('in')}>
-          <ForbiddenIllustration sx={{ my: { xs: 5, sm: 10 } }} />
-        </m.div>
-      </Container>
-    ) : null;
+  // If not authenticated, show access denied
+  if (!authenticated || !user) {
+    return (
+      fallback || (
+        <Container>
+          <Box
+            sx={{
+              height: '50vh',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              textAlign: 'center',
+              flexDirection: 'column',
+            }}
+          >
+            <Iconify
+              icon="solar:shield-cross-bold-duotone"
+              width={64}
+              sx={{ color: 'error.main', mb: 2 }}
+            />
+            <Typography variant="h6" color="error" gutterBottom>
+              Authentication Required
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Please sign in to access this resource
+            </Typography>
+          </Box>
+        </Container>
+      )
+    );
   }
 
-  return <> {children} </>;
+  // Check role-based access
+  if (requiredRoles.length > 0 && !requiredRoles.includes(user.role as any)) {
+    return (
+      fallback || (
+        <Container>
+          <Box
+            sx={{
+              height: '50vh',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              textAlign: 'center',
+              flexDirection: 'column',
+            }}
+          >
+            <Iconify
+              icon="solar:shield-cross-bold-duotone"
+              width={64}
+              sx={{ color: 'error.main', mb: 2 }}
+            />
+            <Typography variant="h6" color="error" gutterBottom>
+              Access Denied
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              You don&apos;t have the required role to access this resource
+            </Typography>
+            <Typography variant="caption" color="text.disabled" sx={{ mt: 1 }}>
+              Required roles: {requiredRoles.join(', ')}
+            </Typography>
+          </Box>
+        </Container>
+      )
+    );
+  }
+
+  // Check permission-based access
+  if (requiredPermissions.length > 0) {
+    const hasAllPermissions = requiredPermissions.every(
+      (permission) => permissions[permission as keyof typeof permissions]
+    );
+
+    if (!hasAllPermissions) {
+      return (
+        fallback || (
+          <Container>
+            <Box
+              sx={{
+                height: '50vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textAlign: 'center',
+                flexDirection: 'column',
+              }}
+            >
+              <Iconify
+                icon="solar:shield-cross-bold-duotone"
+                width={64}
+                sx={{ color: 'error.main', mb: 2 }}
+              />
+              <Typography variant="h6" color="error" gutterBottom>
+                Insufficient Permissions
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                You don&apos;t have the required permissions to access this resource
+              </Typography>
+            </Box>
+          </Container>
+        )
+      );
+    }
+  }
+
+  return <>{children}</>;
 }

@@ -63,6 +63,7 @@ export const paths = {
   dashboard: {
     root: ROOTS.DASHBOARD,
     categories: `${ROOTS.DASHBOARD}/categories`,
+    users: `${ROOTS.DASHBOARD}/users`,
     approvals: {
       root: `${ROOTS.DASHBOARD}/approvals`,
       companies: {

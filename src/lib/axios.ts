@@ -2,13 +2,16 @@ import type { AxiosRequestConfig } from 'axios';
 
 import axios from 'axios';
 
-import { CONFIG } from 'src/global-config';
+import { paths } from '../routes/paths';
 
 // ----------------------------------------------------------------------
 
 const axiosInstance = axios.create({
   baseURL: 'https://api.wazfni.app/api/v1',
   timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
 // Token management
@@ -31,37 +34,80 @@ export const tokenManager = {
   },
 };
 
-// Request interceptor to add token
+// Request interceptor
 axiosInstance.interceptors.request.use(
   (config) => {
-    const token = tokenManager.getToken();
+    const token = localStorage.getItem('accessToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Debug logging
+    const debugLogs = JSON.parse(localStorage.getItem('authDebugLogs') || '[]');
+    debugLogs.push({
+      type: 'REQUEST',
+      timestamp: new Date().toISOString(),
+      url: config.url,
+      method: config.method?.toUpperCase(),
+      hasToken: !!token,
+    });
+    localStorage.setItem('authDebugLogs', JSON.stringify(debugLogs.slice(-50)));
+
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    console.error('Request interceptor error:', error);
+    return Promise.reject(error);
+  }
 );
 
-// Response interceptor for error handling
+// Response interceptor
 axiosInstance.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    // Handle 401 errors (unauthorized)
-    if (error.response?.status === 401) {
-      const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+  (response) => {
+    // Debug logging
+    const debugLogs = JSON.parse(localStorage.getItem('authDebugLogs') || '[]');
+    debugLogs.push({
+      type: 'RESPONSE_SUCCESS',
+      timestamp: new Date().toISOString(),
+      url: response.config.url,
+      status: response.status,
+      data: response.data,
+    });
+    localStorage.setItem('authDebugLogs', JSON.stringify(debugLogs.slice(-50)));
 
-      // Only redirect if not already on sign-in page to avoid infinite redirects
-      if (currentPath !== '/auth/sign-in') {
-        tokenManager.removeToken();
-        // Redirect to login if needed
-        if (typeof window !== 'undefined') {
-          window.location.href = '/auth/sign-in';
-        }
-      }
+    return response;
+  },
+  (error) => {
+    // Debug logging
+    const debugLogs = JSON.parse(localStorage.getItem('authDebugLogs') || '[]');
+    debugLogs.push({
+      type: 'RESPONSE_ERROR',
+      timestamp: new Date().toISOString(),
+      url: error.config?.url,
+      status: error.response?.status,
+      message: error.message,
+      data: error.response?.data,
+    });
+    localStorage.setItem('authDebugLogs', JSON.stringify(debugLogs.slice(-50)));
+
+    if (error.response?.status === 401) {
+      // Clear auth data
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('user');
+
+      // Add debug log
+      debugLogs.push({
+        type: 'AUTH_CLEARED',
+        timestamp: new Date().toISOString(),
+        reason: '401_ERROR',
+      });
+      localStorage.setItem('authDebugLogs', JSON.stringify(debugLogs.slice(-50)));
+
+      // Redirect to sign in
+      window.location.href = paths.auth.signIn;
     }
 
-    return Promise.reject((error.response && error.response.data) || 'Something went wrong!');
+    return Promise.reject(error);
   }
 );
 

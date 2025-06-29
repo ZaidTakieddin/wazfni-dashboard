@@ -1,14 +1,15 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { useMemo, useEffect, useContext, createContext, useState } from 'react';
+import type { AuthContextType } from 'src/types/auth';
 
-import { useRouter } from 'src/routes/hooks';
+import { useMemo, useState, useEffect, useContext, createContext } from 'react';
+
 import { paths } from 'src/routes/paths';
-
-import type { AuthContextType, User } from 'src/types/auth';
+import { useRouter } from 'src/routes/hooks';
 
 import { AuthService } from 'src/lib/services/auth.service';
+import { UserService } from 'src/lib/services/user.service';
 import {
   useLogin,
   useLogout,
@@ -77,9 +78,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
     initializeAuth();
   }, [user, profileLoading, refetchProfile]);
 
-  // Check if user is authenticated and is admin
-  const authenticated = !!user && AuthService.isAdmin(user);
+  // Check if user is authenticated
+  const authenticated = !!user && AuthService.isAuthenticated();
   const isAdmin = user ? AuthService.isAdmin(user) : false;
+  const isUser = user ? user.role === 'USER' : false;
+  const isCompany = user ? user.role === 'COMPANY' : false;
+
+  // Get user permissions for UI access control
+  const permissions = useMemo(() => {
+    if (!user) return UserService.getUserPermissions();
+    return UserService.getUserPermissions(user.role);
+  }, [user]);
 
   // Handle profile error (token expired, etc.)
   useEffect(() => {
@@ -104,6 +113,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const login = async (email: string, password: string): Promise<void> => {
     try {
       await loginMutation.mutateAsync({ email, password });
+      // After successful login, redirect based on role
+      if (user?.role === 'ADMIN') {
+        router.push(paths.dashboard.root);
+      } else if (user?.role === 'COMPANY') {
+        router.push(paths.dashboard.root); // Company dashboard
+      } else {
+        router.push(paths.dashboard.root); // User dashboard
+      }
     } catch (error: any) {
       throw new Error(error?.message || 'Login failed');
     }
@@ -161,13 +178,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       loading,
       authenticated,
       isAdmin,
+      isUser,
+      isCompany,
+      permissions,
       login,
       loginWithGoogle,
       logout,
       register,
       changePassword,
     }),
-    [user, loading, authenticated, isAdmin]
+    [user, loading, authenticated, isAdmin, isUser, isCompany, permissions]
   );
 
   return <AuthContext.Provider value={memoizedValue}>{children}</AuthContext.Provider>;

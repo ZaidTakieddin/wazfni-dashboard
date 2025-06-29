@@ -89,6 +89,11 @@ export const navData: NavSectionProps['data'] = [
         path: paths.dashboard.categories,
         icon: ICONS.folder,
       },
+      {
+        title: 'Users',
+        path: paths.dashboard.users,
+        icon: ICONS.user,
+      },
     ],
   },
 ];

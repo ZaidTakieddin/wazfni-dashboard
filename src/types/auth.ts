@@ -93,6 +93,9 @@ export type AuthContextType = {
   loading: boolean;
   authenticated: boolean;
   isAdmin: boolean;
+  isUser: boolean;
+  isCompany: boolean;
+  permissions: import('../types/user').UserPermissions;
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: (googleToken: string) => Promise<void>;
   logout: () => Promise<void>;
