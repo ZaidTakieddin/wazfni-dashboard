@@ -9,7 +9,6 @@ import {
   Box,
   Chip,
   Menu,
-  Card,
   Link,
   Stack,
   Avatar,
@@ -18,7 +17,6 @@ import {
   MenuItem,
   IconButton,
   Typography,
-  CardContent,
   CircularProgress,
 } from '@mui/material';
 
@@ -34,6 +32,8 @@ import { toast } from 'src/components/snackbar';
 import { Iconify } from 'src/components/iconify';
 import { ConfirmDialog } from 'src/components/custom-dialog';
 import CustomDataGrid from 'src/components/data-grid/custom-datagrid';
+
+import { DEFAULT_PAGE, DEFAULT_LIMIT } from 'src/types/common';
 
 import { UserViewDialog } from './user-view-dialog';
 import { UserEditDialog } from './user-edit-dialog';
@@ -55,7 +55,14 @@ export function UserListTable({ filters, onFiltersChange, permissions }: Props) 
     userId: string;
   } | null>(null);
 
-  const { data, isLoading, error } = useUsers(filters);
+  // Ensure filters have default pagination values
+  const paginatedFilters = {
+    page: DEFAULT_PAGE,
+    limit: DEFAULT_LIMIT,
+    ...filters,
+  };
+
+  const { data, isLoading, error } = useUsers(paginatedFilters);
   const users = data?.users || [];
   const pagination = data?.pagination;
 
@@ -63,6 +70,28 @@ export function UserListTable({ filters, onFiltersChange, permissions }: Props) 
   const toggleUserStatus = useToggleUserStatus();
   const updateUserRole = useUpdateUserRole();
   const exportUsers = useExportUsers();
+
+  const handlePaginationChange = useCallback(
+    (page: number, pageSize: number) => {
+      onFiltersChange({
+        ...filters,
+        page,
+        limit: pageSize,
+      });
+    },
+    [filters, onFiltersChange]
+  );
+
+  const handleSortChange = useCallback(
+    (sortBy: string, sortOrder: 'asc' | 'desc') => {
+      onFiltersChange({
+        ...filters,
+        sortBy,
+        sortOrder,
+      });
+    },
+    [filters, onFiltersChange]
+  );
 
   const handleView = useCallback((user: UserManagement) => {
     setViewingUserId(user.id);
@@ -202,59 +231,47 @@ export function UserListTable({ filters, onFiltersChange, permissions }: Props) 
         field: 'role',
         headerName: 'Role',
         width: 120,
-        renderCell: (params) => {
-          const roleColors = {
-            USER: 'primary',
-            ADMIN: 'error',
-            COMPANY: 'warning',
-          } as const;
-
-          return (
-            <Chip
-              size="small"
-              label={params.value}
-              color={roleColors[params.value as keyof typeof roleColors] || 'default'}
-              variant="soft"
-              onClick={
-                permissions.canManageRoles
-                  ? (e) => setRoleMenuAnchor({ anchorEl: e.currentTarget, userId: params.row.id })
-                  : undefined
-              }
-              sx={{ cursor: permissions.canManageRoles ? 'pointer' : 'default' }}
-            />
-          );
-        },
+        renderCell: (params) => (
+          <Chip
+            label={params.value}
+            size="small"
+            color={
+              params.value === 'ADMIN' ? 'primary' : params.value === 'COMPANY' ? 'info' : 'default'
+            }
+            variant="soft"
+            onClick={
+              permissions.canManageRoles
+                ? (event) =>
+                    setRoleMenuAnchor({ anchorEl: event.currentTarget, userId: params.row.id })
+                : undefined
+            }
+            sx={{ cursor: permissions.canManageRoles ? 'pointer' : 'default' }}
+          />
+        ),
       },
       {
         field: 'isVerified',
         headerName: 'Status',
         width: 100,
-        align: 'center',
         renderCell: (params) => (
           <Chip
-            size="small"
             label={params.value ? 'Verified' : 'Unverified'}
+            size="small"
             color={params.value ? 'success' : 'warning'}
             variant="soft"
           />
         ),
       },
       {
-        field: 'phoneNumber',
-        headerName: 'Phone',
-        width: 150,
-        renderCell: (params) => <Typography variant="body2">{params.value || '-'}</Typography>,
-      },
-      {
         field: 'company',
         headerName: 'Company',
         width: 180,
         renderCell: (params) => {
-          const company = params.row.company;
+          const { company } = params.row;
           if (!company) {
             return (
               <Typography variant="body2" color="text.disabled">
-                No Company
+                No company
               </Typography>
             );
           }
@@ -264,21 +281,21 @@ export function UserListTable({ filters, onFiltersChange, permissions }: Props) 
               <Link
                 component="button"
                 variant="body2"
-                sx={{
-                  fontWeight: 500,
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  '&:hover': {
-                    textDecoration: 'underline',
-                  },
-                }}
                 onClick={() => handleCompanyClick(company.id)}
+                sx={{
+                  textAlign: 'left',
+                  maxWidth: '100%',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  '&:hover': { textDecoration: 'underline' },
+                }}
               >
                 {company.name}
               </Link>
               <Chip
-                size="small"
                 label={company.approvalStatus}
+                size="small"
                 color={company.approvalStatus === 'APPROVED' ? 'success' : 'warning'}
                 variant="soft"
                 sx={{ fontSize: '0.7rem', height: 20, alignSelf: 'flex-start' }}
@@ -350,14 +367,6 @@ export function UserListTable({ filters, onFiltersChange, permissions }: Props) 
     [permissions, handleView, handleEdit, handleDelete, handleToggleStatus, handleCompanyClick]
   );
 
-  if (isLoading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
   if (error) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
@@ -368,22 +377,16 @@ export function UserListTable({ filters, onFiltersChange, permissions }: Props) 
 
   return (
     <>
-      {/* Pagination Info */}
-      {pagination && (
-        <Card sx={{ mb: 2 }}>
-          <CardContent sx={{ py: 1.5 }}>
-            <Typography variant="body2" color="text.secondary">
-              Showing {(pagination.page - 1) * pagination.limit + 1} to{' '}
-              {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}{' '}
-              users
-              {pagination.pages > 1 && ` (Page ${pagination.page} of ${pagination.pages})`}
-            </Typography>
-          </CardContent>
-        </Card>
-      )}
-
       <Box sx={{ width: '100%' }}>
-        <CustomDataGrid data={users} columns={columns} loading={isLoading} />
+        <CustomDataGrid
+          data={users}
+          columns={columns}
+          loading={isLoading}
+          serverSide
+          pagination={pagination}
+          onPaginationChange={handlePaginationChange}
+          onSortChange={handleSortChange}
+        />
       </Box>
 
       {/* Role Change Menu */}

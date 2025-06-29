@@ -1,8 +1,10 @@
 import axiosInstance from '../axios';
 
 import type {
+  UserStats,
   UserProfile,
   UserFilters,
+  UsersResponse,
   UserManagement,
   UserPermissions,
   CreateUserRequest,
@@ -18,16 +20,7 @@ export class UserService {
   /**
    * Get user statistics (Admin only)
    */
-  static async getUserStats(): Promise<{
-    totalUsers: number;
-    verifiedUsers: number;
-    unverifiedUsers: number;
-    adminUsers: number;
-    regularUsers: number;
-    usersWithCompanies: number;
-    usersWithoutCompanies: number;
-    recentUsers: number;
-  }> {
+  static async getUserStats(): Promise<UserStats> {
     try {
       const response = await axiosInstance.get('/users/admin/statistics');
       return response.data;
@@ -40,15 +33,7 @@ export class UserService {
   /**
    * Get all users with pagination and filtering (Admin only)
    */
-  static async getUsers(filters?: UserFilters): Promise<{
-    users: UserManagement[];
-    pagination: {
-      page: number;
-      limit: number;
-      total: number;
-      pages: number;
-    };
-  }> {
+  static async getUsers(filters?: UserFilters): Promise<UsersResponse> {
     try {
       const params = new URLSearchParams();
 
@@ -61,10 +46,10 @@ export class UserService {
       if (filters?.sortOrder) params.append('sortOrder', filters.sortOrder);
 
       // Filtering
-      if (filters?.role && filters.role !== 'ALL') {
+      if (filters?.role) {
         params.append('role', filters.role);
       }
-      if (filters?.isVerified !== undefined && filters.isVerified !== 'ALL') {
+      if (filters?.isVerified !== undefined) {
         params.append('isVerified', filters.isVerified.toString());
       }
       if (filters?.search) {
@@ -75,7 +60,42 @@ export class UserService {
       const endpoint = queryString ? `/users/admin/users?${queryString}` : '/users/admin/users';
 
       const response = await axiosInstance.get(endpoint);
-      return response.data;
+
+      // Handle different response structures
+      if (response.data?.data && response.data?.pagination) {
+        // Paginated response structure
+        return {
+          data: response.data.data,
+          pagination: response.data.pagination,
+        };
+      } else if (Array.isArray(response.data)) {
+        // Simple array response - create pagination structure
+        const data = response.data;
+        return {
+          data,
+          pagination: {
+            page: 1,
+            limit: data.length,
+            total: data.length,
+            totalPages: 1,
+            hasNext: false,
+            hasPrev: false,
+          },
+        };
+      } else {
+        console.warn('Unexpected users response structure:', response.data);
+        return {
+          data: [],
+          pagination: {
+            page: 1,
+            limit: 10,
+            total: 0,
+            totalPages: 0,
+            hasNext: false,
+            hasPrev: false,
+          },
+        };
+      }
     } catch (error) {
       console.error('UserService.getUsers error:', error);
       throw error;
@@ -110,7 +130,7 @@ export class UserService {
         firstName: data.firstName,
         lastName: data.lastName,
         phoneNumber: data.phoneNumber,
-        isVerified: true, // Admin created users are verified by default
+        isVerified: data.isVerified ?? true, // Admin created users are verified by default
       });
       return response.data.user;
     } catch (error) {
@@ -130,7 +150,7 @@ export class UserService {
       if (data.lastName !== undefined) updateData.lastName = data.lastName;
       if (data.phoneNumber !== undefined) updateData.phoneNumber = data.phoneNumber;
       if (data.role !== undefined) updateData.role = data.role;
-      if (data.isActive !== undefined) updateData.isVerified = data.isActive; // API uses isVerified
+      if (data.isVerified !== undefined) updateData.isVerified = data.isVerified;
       if (data.email !== undefined) updateData.email = data.email;
       if (data.password !== undefined) updateData.password = data.password;
 
@@ -202,36 +222,9 @@ export class UserService {
   /**
    * Update current user profile
    */
-  static async updateMyProfile(
-    data: UpdateUserProfileRequest,
-    files?: {
-      avatar?: File;
-      cv?: File;
-    }
-  ): Promise<UserProfile> {
+  static async updateMyProfile(data: UpdateUserProfileRequest): Promise<UserProfile> {
     try {
-      const formData = new FormData();
-
-      // Add text fields
-      Object.entries(data).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          formData.append(key, value.toString());
-        }
-      });
-
-      // Add files
-      if (files?.avatar) {
-        formData.append('avatar', files.avatar);
-      }
-      if (files?.cv) {
-        formData.append('cv', files.cv);
-      }
-
-      const response = await axiosInstance.patch<UserProfile>('/users/profile/me', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      const response = await axiosInstance.patch('/users/profile/me', data);
       return response.data;
     } catch (error) {
       console.error('UserService.updateMyProfile error:', error);
@@ -244,7 +237,7 @@ export class UserService {
    */
   static async getUserProfile(userId: string): Promise<UserProfile> {
     try {
-      const response = await axiosInstance.get<UserProfile>(`/users/${userId}/profile`);
+      const response = await axiosInstance.get(`/users/${userId}/profile`);
       return response.data;
     } catch (error) {
       console.error('UserService.getUserProfile error:', error);
@@ -253,7 +246,7 @@ export class UserService {
   }
 
   /**
-   * Get basic user info by ID
+   * Get user by ID (simplified version)
    */
   static async getUserById(userId: string): Promise<UserManagement> {
     try {
@@ -274,12 +267,13 @@ export class UserService {
     const isAdmin = userRole === 'ADMIN';
 
     return {
+      canViewUsers: isAdmin,
       canCreateUsers: isAdmin,
       canUpdateUsers: isAdmin,
       canDeleteUsers: isAdmin,
-      canViewAllUsers: isAdmin,
       canManageRoles: isAdmin,
       canDeactivateUsers: isAdmin,
+      canExportUsers: isAdmin,
     };
   }
 
@@ -294,14 +288,12 @@ export class UserService {
   // ===== UTILITY METHODS =====
 
   /**
-   * Search users by query
+   * Search users (Admin only)
    */
   static async searchUsers(query: string): Promise<UserManagement[]> {
     try {
-      const response = await axiosInstance.get(
-        `/users/admin/users?search=${encodeURIComponent(query)}&limit=50`
-      );
-      return response.data.users;
+      const response = await axiosInstance.get(`/users/search?q=${encodeURIComponent(query)}`);
+      return response.data;
     } catch (error) {
       console.error('UserService.searchUsers error:', error);
       throw error;
@@ -310,53 +302,25 @@ export class UserService {
 
   /**
    * Export users data (Admin only)
-   * Note: This endpoint might not exist in the API, implementing as CSV download from frontend data
    */
   static async exportUsers(filters?: UserFilters): Promise<Blob> {
     try {
-      // Get all users data first
-      const allUsers = await this.getUsers({ ...filters, limit: 1000 });
+      const params = new URLSearchParams();
 
-      // Create CSV content
-      const headers = [
-        'ID',
-        'Email',
-        'First Name',
-        'Last Name',
-        'Phone',
-        'Role',
-        'Verified',
-        'Last Login',
-        'Created At',
-        'Company',
-        'Applications Count',
-        'Bookmarks Count',
-      ];
+      if (filters?.role) params.append('role', filters.role);
+      if (filters?.isVerified !== undefined) {
+        params.append('isVerified', filters.isVerified.toString());
+      }
+      if (filters?.search) params.append('search', filters.search);
 
-      const csvContent = [
-        headers.join(','),
-        ...allUsers.users.map((user) =>
-          [
-            user.id,
-            user.email,
-            user.firstName,
-            user.lastName,
-            user.phoneNumber || '',
-            user.role,
-            user.isVerified ? 'Yes' : 'No',
-            user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never',
-            new Date(user.createdAt).toLocaleDateString(),
-            user.company?.name || 'None',
-            user._count?.applications || 0,
-            user._count?.bookmarks || 0,
-          ]
-            .map((field) => `"${field}"`)
-            .join(',')
-        ),
-      ].join('\n');
+      const queryString = params.toString();
+      const endpoint = queryString ? `/users/export?${queryString}` : '/users/export';
 
-      // Create blob
-      return new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const response = await axiosInstance.get(endpoint, {
+        responseType: 'blob',
+      });
+
+      return response.data;
     } catch (error) {
       console.error('UserService.exportUsers error:', error);
       throw error;

@@ -1,3 +1,4 @@
+import type { PaginationParams, PaginatedResponse } from './common';
 import type { UserRole, WorkExperience, EducationCertificate } from './auth';
 
 // ----------------------------------------------------------------------
@@ -60,6 +61,7 @@ export type CreateUserRequest = {
   lastName: string;
   phoneNumber?: string;
   role?: UserRole;
+  isVerified?: boolean;
 };
 
 export type UpdateUserRequest = {
@@ -69,7 +71,7 @@ export type UpdateUserRequest = {
   lastName?: string;
   phoneNumber?: string;
   role?: UserRole;
-  isActive?: boolean; // Maps to isVerified in API
+  isVerified?: boolean;
 };
 
 export type UpdateUserProfileRequest = {
@@ -83,25 +85,10 @@ export type UpdateUserProfileRequest = {
   phone?: string;
 };
 
-export type UserFilters = {
-  // Pagination
-  page?: number;
-  limit?: number;
-
-  // Sorting
-  sortBy?: 'createdAt' | 'updatedAt' | 'email' | 'role' | 'isVerified' | 'lastLogin';
-  sortOrder?: 'asc' | 'desc';
-
-  // Filtering
-  role?: UserRole | 'ALL';
-  isVerified?: boolean | 'ALL';
+export type UserFilters = PaginationParams & {
+  role?: UserRole;
+  isVerified?: boolean;
   search?: string;
-
-  // Legacy filters (for backward compatibility)
-  isActive?: boolean | 'ALL';
-  city?: string;
-  dateFrom?: string;
-  dateTo?: string;
 };
 
 // API Response Types
@@ -110,15 +97,7 @@ export type UserResponse = {
   user: UserManagement;
 };
 
-export type UsersResponse = {
-  users: UserManagement[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    pages: number;
-  };
-};
+export type UsersResponse = PaginatedResponse<UserManagement>;
 
 export type UserProfileResponse = {
   data: UserProfile;
@@ -144,12 +123,13 @@ export type UserProfileFormData = UpdateUserProfileRequest;
 
 // Role-based permissions
 export type UserPermissions = {
+  canViewUsers: boolean;
   canCreateUsers: boolean;
   canUpdateUsers: boolean;
   canDeleteUsers: boolean;
-  canViewAllUsers: boolean;
   canManageRoles: boolean;
   canDeactivateUsers: boolean;
+  canExportUsers: boolean;
 };
 
 // Table row type for DataGrid
@@ -158,4 +138,15 @@ export type UserTableRow = UserManagement & {
   roleLabel: string;
   statusLabel: string;
   lastLoginFormatted: string;
+};
+
+export type UserStats = {
+  totalUsers: number;
+  verifiedUsers: number;
+  unverifiedUsers: number;
+  adminUsers: number;
+  regularUsers: number;
+  usersWithCompanies: number;
+  usersWithoutCompanies: number;
+  recentUsers: number;
 };

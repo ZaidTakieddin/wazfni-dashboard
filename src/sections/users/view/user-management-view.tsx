@@ -40,7 +40,7 @@ export function UserManagementView() {
   }, [filters]);
 
   // Role-based access control
-  if (!permissions.canViewAllUsers) {
+  if (!permissions.canViewUsers) {
     return (
       <DashboardContent>
         <Box

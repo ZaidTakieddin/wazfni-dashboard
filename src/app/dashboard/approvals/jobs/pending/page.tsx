@@ -1,22 +1,23 @@
 'use client';
 
-import type { Job } from 'src/types/approval';
 import type { GridColDef } from '@mui/x-data-grid';
+import type { Job, JobFilters } from 'src/types/approval';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 
+import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
 import Chip from '@mui/material/Chip';
-import { Stack } from '@mui/material';
 import Button from '@mui/material/Button';
+import Avatar from '@mui/material/Avatar';
 import Dialog from '@mui/material/Dialog';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import LoadingButton from '@mui/lab/LoadingButton';
 import DialogTitle from '@mui/material/DialogTitle';
 import { GridActionsCellItem } from '@mui/x-data-grid';
-import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
 
 import { paths } from 'src/routes/paths';
 import { useRouter } from 'src/routes/hooks';
@@ -33,6 +34,8 @@ import { LoadingScreen } from 'src/components/loading-screen';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 import CustomDataGrid from 'src/components/data-grid/custom-datagrid';
 
+import { DEFAULT_PAGE, DEFAULT_LIMIT } from 'src/types/common';
+
 // ----------------------------------------------------------------------
 
 export default function PendingJobsPage() {
@@ -42,10 +45,36 @@ export default function PendingJobsPage() {
   const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [filters, setFilters] = useState<JobFilters>({
+    page: DEFAULT_PAGE,
+    limit: DEFAULT_LIMIT,
+    sortBy: 'createdAt',
+    sortOrder: 'desc',
+    approvalStatus: 'PENDING',
+  });
 
-  const { data: jobs = [], isLoading, error } = usePendingJobs();
+  const { data, isLoading, error } = usePendingJobs(filters);
+  const jobs = data?.jobs || [];
+  const pagination = data?.pagination;
+
   const approveJobMutation = useApproveJob();
   const rejectJobMutation = useRejectJob();
+
+  const handlePaginationChange = useCallback((page: number, pageSize: number) => {
+    setFilters((prev) => ({
+      ...prev,
+      page,
+      limit: pageSize,
+    }));
+  }, []);
+
+  const handleSortChange = useCallback((sortBy: string, sortOrder: 'asc' | 'desc') => {
+    setFilters((prev) => ({
+      ...prev,
+      sortBy,
+      sortOrder,
+    }));
+  }, []);
 
   const handleApprove = async (job: Job) => {
     setSelectedJob(job);
@@ -68,7 +97,7 @@ export default function PendingJobsPage() {
       await approveJobMutation.mutateAsync(selectedJob.id);
 
       toast.success(
-        `Job "${selectedJob.jobTitle}" has been approved successfully! It's now visible to all users.`
+        `${selectedJob.jobTitle} at ${selectedJob.company?.name} has been approved successfully! It is now live for job seekers.`
       );
       setApproveConfirmOpen(false);
       setSelectedJob(null);
@@ -93,7 +122,7 @@ export default function PendingJobsPage() {
       });
 
       toast.success(
-        `Job "${selectedJob.jobTitle}" has been rejected. The company has been notified.`
+        `${selectedJob.jobTitle} at ${selectedJob.company?.name} has been rejected. The company has been notified with the reason.`
       );
       setRejectDialogOpen(false);
       setRejectionReason('');
@@ -110,51 +139,29 @@ export default function PendingJobsPage() {
     () => [
       {
         field: 'jobTitle',
-        headerName: 'Job Title',
+        headerName: 'Job',
         flex: 2,
         minWidth: 200,
         renderCell: (params) => (
-          <Stack direction="column" gap={0.5} width="100%">
-            <Typography variant="subtitle2" noWrap>
-              {params.row.jobTitle}
-            </Typography>
-            <Typography variant="caption" color="text.secondary" noWrap>
-              {params.row.company?.name || 'N/A'}
-            </Typography>
-          </Stack>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
+            <Avatar
+              src={params.row.company?.logo}
+              alt={params.row.company?.name}
+              variant="rounded"
+              sx={{ width: 32, height: 32, flexShrink: 0 }}
+            >
+              {params.row.company?.name?.charAt(0).toUpperCase()}
+            </Avatar>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography variant="subtitle2" noWrap>
+                {params.row.jobTitle}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" noWrap>
+                {params.row.company?.name}
+              </Typography>
+            </Box>
+          </Box>
         ),
-      },
-      {
-        field: 'subCategories',
-        headerName: 'Categories',
-        flex: 1,
-        minWidth: 120,
-        renderCell: (params) => {
-          const categories = Array.isArray(params.value) ? params.value : [params.value];
-          const displayCount = 2;
-          const visibleCategories = categories.slice(0, displayCount);
-          const remainingCount = categories.length - displayCount;
-
-          return (
-            <Stack direction="row" gap={0.5} alignItems="center" width="100%">
-              {visibleCategories.map((cat, index) => (
-                <Chip
-                  key={index}
-                  label={cat.name}
-                  size="small"
-                  variant="outlined"
-                  color="primary"
-                  sx={{ fontSize: '0.75rem', height: 20 }}
-                />
-              ))}
-              {remainingCount > 0 && (
-                <Typography variant="caption" color="text.secondary">
-                  +{remainingCount}
-                </Typography>
-              )}
-            </Stack>
-          );
-        },
       },
       {
         field: 'workType',
@@ -162,37 +169,52 @@ export default function PendingJobsPage() {
         width: 120,
         renderCell: (params) => (
           <Chip
-            label={params.value}
             size="small"
-            color={
-              params.value === 'REMOTE' ? 'success' : params.value === 'HYBRID' ? 'info' : 'default'
-            }
+            label={params.value}
+            color="primary"
             variant="soft"
+            sx={{ textTransform: 'capitalize' }}
+          />
+        ),
+      },
+      {
+        field: 'contractType',
+        headerName: 'Contract',
+        width: 120,
+        renderCell: (params) => (
+          <Chip
+            size="small"
+            label={params.value}
+            color="secondary"
+            variant="soft"
+            sx={{ textTransform: 'capitalize' }}
           />
         ),
       },
       {
         field: 'experienceLevel',
-        headerName: 'Level',
-        width: 90,
+        headerName: 'Experience',
+        width: 120,
         renderCell: (params) => (
-          <Label
-            variant="soft"
-            color={
-              (params.value === 'SENIOR' && 'error') ||
-              (params.value === 'MID' && 'warning') ||
-              (params.value === 'JUNIOR' && 'success') ||
-              'default'
-            }
-          >
+          <Typography variant="body2" sx={{ textTransform: 'capitalize' }}>
+            {params.value}
+          </Typography>
+        ),
+      },
+      {
+        field: 'approvalStatus',
+        headerName: 'Status',
+        width: 100,
+        renderCell: (params) => (
+          <Label variant="soft" color="warning" sx={{ textTransform: 'capitalize' }}>
             {params.value}
           </Label>
         ),
       },
       {
         field: 'createdAt',
-        headerName: 'Posted',
-        width: 90,
+        headerName: 'Submitted',
+        width: 110,
         renderCell: (params) => (
           <Typography variant="body2" noWrap>
             {new Date(params.value).toLocaleDateString()}
@@ -219,7 +241,6 @@ export default function PendingJobsPage() {
               selectedJob?.id === params.row.id &&
               params.row.approvalStatus === 'PENDING'
             }
-            showInMenu
           />,
           <GridActionsCellItem
             icon={<Iconify icon="eva:close-fill" />}
@@ -230,12 +251,18 @@ export default function PendingJobsPage() {
               selectedJob?.id === params.row.id &&
               params.row.approvalStatus === 'PENDING'
             }
-            showInMenu
           />,
         ],
       },
     ],
-    [approveJobMutation.isPending, rejectJobMutation.isPending, selectedJob?.id]
+    [
+      approveJobMutation.isPending,
+      rejectJobMutation.isPending,
+      selectedJob?.id,
+      handleView,
+      handleApprove,
+      handleReject,
+    ]
   );
 
   if (isLoading) {
@@ -245,20 +272,16 @@ export default function PendingJobsPage() {
   if (error) {
     return (
       <DashboardContent>
-        <EmptyContent
-          filled
-          title="Error Loading Jobs"
-          description="Failed to load pending jobs. Please try again."
-          action={
-            <Button
-              variant="contained"
-              onClick={() => window.location.reload()}
-              startIcon={<Iconify icon="eva:refresh-fill" />}
-            >
-              Retry
-            </Button>
-          }
+        <CustomBreadcrumbs
+          heading="Pending Job Approvals"
+          links={[
+            { name: 'Dashboard', href: paths.dashboard.root },
+            { name: 'Approvals', href: paths.dashboard.approvals.root },
+            { name: 'Jobs' },
+          ]}
+          sx={{ mb: { xs: 3, md: 5 } }}
         />
+        <EmptyContent title="Error" description="Failed to load jobs" />
       </DashboardContent>
     );
   }
@@ -266,41 +289,47 @@ export default function PendingJobsPage() {
   return (
     <DashboardContent>
       <CustomBreadcrumbs
-        heading="Pending Jobs"
+        heading="Pending Job Approvals"
         links={[
           { name: 'Dashboard', href: paths.dashboard.root },
           { name: 'Approvals', href: paths.dashboard.approvals.root },
-          { name: 'Jobs', href: paths.dashboard.approvals.jobs.root },
-          { name: 'Pending' },
+          { name: 'Jobs' },
         ]}
-        action={
-          <Button
-            variant="contained"
-            startIcon={<Iconify icon="mingcute:add-line" />}
-            onClick={() => router.push(paths.dashboard.approvals.jobs.all)}
-          >
-            View All Jobs
-          </Button>
-        }
         sx={{ mb: { xs: 3, md: 5 } }}
       />
 
-      <Card sx={{ height: 600, width: '100%' }}>
-        <CustomDataGrid data={jobs} columns={columns} loading={isLoading} />
+      <Card>
+        <Box sx={{ height: 600, width: '100%' }}>
+          <CustomDataGrid
+            data={jobs}
+            columns={columns}
+            loading={isLoading}
+            serverSide
+            pagination={pagination}
+            onPaginationChange={handlePaginationChange}
+            onSortChange={handleSortChange}
+          />
+        </Box>
       </Card>
 
       {/* Approve Confirmation Dialog */}
       <ConfirmDialog
         open={approveConfirmOpen}
-        onClose={() => {
-          setApproveConfirmOpen(false);
-          setSelectedJob(null);
-        }}
+        onClose={() => setApproveConfirmOpen(false)}
         title="Approve Job"
         content={
-          selectedJob
-            ? `Are you sure you want to approve "${selectedJob.jobTitle}"? This action cannot be undone and the job will be visible to all users.`
-            : ''
+          selectedJob && (
+            <Box>
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                Are you sure you want to approve <strong>{selectedJob.jobTitle}</strong> at{' '}
+                <strong>{selectedJob.company?.name}</strong>?
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Once approved, this job will be visible to all job seekers and they can apply for
+                it.
+              </Typography>
+            </Box>
+          )
         }
         action={
           <LoadingButton
@@ -318,20 +347,30 @@ export default function PendingJobsPage() {
       {/* Reject Dialog */}
       <Dialog
         open={rejectDialogOpen}
-        onClose={() => {
-          setRejectDialogOpen(false);
-          setRejectionReason('');
-          setSelectedJob(null);
-        }}
+        onClose={() => setRejectDialogOpen(false)}
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Reject Job</DialogTitle>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Iconify icon="eva:close-fill" sx={{ color: 'error.main' }} />
+            Reject Job
+          </Box>
+        </DialogTitle>
+
         <DialogContent>
-          <Typography variant="body2" sx={{ mb: 3 }}>
-            {selectedJob &&
-              `Are you sure you want to reject "${selectedJob.jobTitle}"? Please provide a detailed reason for rejection.`}
-          </Typography>
+          {selectedJob && (
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="body1" sx={{ mb: 1 }}>
+                You are about to reject <strong>{selectedJob.jobTitle}</strong> at{' '}
+                <strong>{selectedJob.company?.name}</strong>.
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Please provide a clear reason for rejection. This will be sent to the company.
+              </Typography>
+            </Box>
+          )}
+
           <TextField
             fullWidth
             multiline
@@ -339,25 +378,19 @@ export default function PendingJobsPage() {
             label="Rejection Reason"
             value={rejectionReason}
             onChange={(e) => setRejectionReason(e.target.value)}
-            placeholder="Please explain why this job is being rejected..."
-            helperText="This reason will be sent to the company and the job will not be visible to users."
+            placeholder="Please provide a detailed reason for rejection..."
+            required
           />
         </DialogContent>
+
         <DialogActions>
-          <Button
-            onClick={() => {
-              setRejectDialogOpen(false);
-              setRejectionReason('');
-              setSelectedJob(null);
-            }}
-          >
-            Cancel
-          </Button>
+          <Button onClick={() => setRejectDialogOpen(false)}>Cancel</Button>
           <LoadingButton
             variant="contained"
             color="error"
             onClick={confirmReject}
             loading={rejectJobMutation.isPending}
+            disabled={!rejectionReason.trim()}
             startIcon={<Iconify icon="eva:close-fill" />}
           >
             Reject Job

@@ -40,12 +40,14 @@ export function SubcategoryListTable() {
   const [editingSubcategory, setEditingSubcategory] = useState<Subcategory | null>(null);
   const [deletingSubcategoryId, setDeletingSubcategoryId] = useState<string | null>(null);
 
-  const { data: categories = [] } = useCategories();
+  const { data: categoriesData } = useCategories();
+  const categories = categoriesData?.categories || [];
   const {
-    data: subcategories = [],
+    data: subcategoriesData,
     isLoading,
     error,
   } = useSubcategoriesByCategory(selectedCategoryId);
+  const subcategories = subcategoriesData?.subcategories || [];
 
   const deleteSubcategory = useDeleteSubcategory();
 

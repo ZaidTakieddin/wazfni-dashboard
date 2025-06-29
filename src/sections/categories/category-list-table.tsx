@@ -1,7 +1,7 @@
 'use client';
 
 import type { GridColDef } from '@mui/x-data-grid';
-import type { Category } from 'src/types/category';
+import type { Category, CategoryFilters } from 'src/types/category';
 
 import { useState, useCallback } from 'react';
 
@@ -23,6 +23,8 @@ import { Iconify } from 'src/components/iconify';
 import { ConfirmDialog } from 'src/components/custom-dialog';
 import CustomDataGrid from 'src/components/data-grid/custom-datagrid';
 
+import { DEFAULT_PAGE, DEFAULT_LIMIT } from 'src/types/common';
+
 import { CategoryEditDialog } from './category-edit-dialog';
 
 // ----------------------------------------------------------------------
@@ -30,9 +32,34 @@ import { CategoryEditDialog } from './category-edit-dialog';
 export function CategoryListTable() {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
+  const [filters, setFilters] = useState<CategoryFilters>({
+    page: DEFAULT_PAGE,
+    limit: DEFAULT_LIMIT,
+    sortBy: 'name',
+    sortOrder: 'asc',
+  });
 
-  const { data: categories = [], isLoading, error } = useCategories();
+  const { data, isLoading, error } = useCategories(filters);
+  const categories = data?.categories || [];
+  const pagination = data?.pagination;
+
   const deleteCategory = useDeleteCategory();
+
+  const handlePaginationChange = useCallback((page: number, pageSize: number) => {
+    setFilters((prev) => ({
+      ...prev,
+      page,
+      limit: pageSize,
+    }));
+  }, []);
+
+  const handleSortChange = useCallback((sortBy: string, sortOrder: 'asc' | 'desc') => {
+    setFilters((prev) => ({
+      ...prev,
+      sortBy,
+      sortOrder,
+    }));
+  }, []);
 
   const handleEdit = useCallback((category: Category) => {
     setEditingCategory(category);
@@ -143,14 +170,6 @@ export function CategoryListTable() {
     },
   ];
 
-  if (isLoading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
   if (error) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
@@ -161,8 +180,16 @@ export function CategoryListTable() {
 
   return (
     <>
-      <Box sx={{ height: 600, width: '100%' }}>
-        <CustomDataGrid data={categories} columns={columns} loading={isLoading} />
+      <Box sx={{ width: '100%' }}>
+        <CustomDataGrid
+          data={categories}
+          columns={columns}
+          loading={isLoading}
+          serverSide
+          pagination={pagination}
+          onPaginationChange={handlePaginationChange}
+          onSortChange={handleSortChange}
+        />
       </Box>
 
       {/* Edit Dialog */}

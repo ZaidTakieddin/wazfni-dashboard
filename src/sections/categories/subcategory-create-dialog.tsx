@@ -37,7 +37,8 @@ type Props = {
 };
 
 export function SubcategoryCreateDialog({ open, onClose }: Props) {
-  const { data: categories = [] } = useCategories();
+  const { data: categoriesData } = useCategories();
+  const categories = categoriesData?.categories || [];
   const createSubcategory = useCreateSubcategory();
 
   const methods = useForm<SubcategoryFormData>({

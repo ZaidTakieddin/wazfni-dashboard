@@ -3,9 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CategoryService } from '../services/category.service';
 
 import type {
-  Subcategory,
+  CategoryFilters,
+  SubcategoryFilters,
+  CategoriesResponse,
   CreateCategoryRequest,
   UpdateCategoryRequest,
+  SubcategoriesResponse,
   CreateSubcategoryRequest,
   UpdateSubcategoryRequest,
 } from '../../types/category';
@@ -16,11 +19,11 @@ import type {
 export const categoryKeys = {
   all: ['categories'] as const,
   lists: () => [...categoryKeys.all, 'list'] as const,
-  list: (filters: string) => [...categoryKeys.lists(), { filters }] as const,
+  list: (filters: CategoryFilters) => [...categoryKeys.lists(), { filters }] as const,
   details: () => [...categoryKeys.all, 'detail'] as const,
   detail: (id: string) => [...categoryKeys.details(), id] as const,
-  subcategories: (categoryId: string) =>
-    [...categoryKeys.detail(categoryId), 'subcategories'] as const,
+  subcategories: (filters: SubcategoryFilters) =>
+    [...categoryKeys.all, 'subcategories', { filters }] as const,
   subcategory: (subcategoryId: string) => ['subcategory', subcategoryId] as const,
   withSubcategories: () => [...categoryKeys.all, 'withSubcategories'] as const,
 };
@@ -28,13 +31,17 @@ export const categoryKeys = {
 // ===== CATEGORY HOOKS =====
 
 /**
- * Get all categories
+ * Get all categories with pagination
  */
-export function useCategories() {
+export function useCategories(filters?: CategoryFilters) {
   return useQuery({
-    queryKey: categoryKeys.lists(),
-    queryFn: () => CategoryService.getCategories(),
+    queryKey: categoryKeys.list(filters || {}),
+    queryFn: () => CategoryService.getCategories(filters),
     staleTime: 5 * 60 * 1000, // 5 minutes
+    select: (data: CategoriesResponse) => ({
+      categories: data.data,
+      pagination: data.pagination,
+    }),
   });
 }
 
@@ -51,7 +58,7 @@ export function useCategory(categoryId: string) {
 }
 
 /**
- * Get all categories with their subcategories
+ * Get all categories with their subcategories (for simple lists)
  */
 export function useCategoriesWithSubcategories() {
   return useQuery({
@@ -121,7 +128,6 @@ export function useDeleteCategory() {
     onSuccess: (_, categoryId) => {
       // Remove the category from cache
       queryClient.removeQueries({ queryKey: categoryKeys.detail(categoryId) });
-      queryClient.removeQueries({ queryKey: categoryKeys.subcategories(categoryId) });
 
       // Invalidate lists to ensure consistency
       queryClient.invalidateQueries({ queryKey: categoryKeys.lists() });
@@ -138,15 +144,25 @@ export function useDeleteCategory() {
 // ===== SUBCATEGORY HOOKS =====
 
 /**
- * Get subcategories by category
+ * Get subcategories with pagination and filters
+ */
+export function useSubcategories(filters?: SubcategoryFilters) {
+  return useQuery({
+    queryKey: categoryKeys.subcategories(filters || {}),
+    queryFn: () => CategoryService.getSubcategories(filters),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    select: (data: SubcategoriesResponse) => ({
+      subcategories: data.data,
+      pagination: data.pagination,
+    }),
+  });
+}
+
+/**
+ * Get subcategories by category (backward compatibility)
  */
 export function useSubcategoriesByCategory(categoryId: string) {
-  return useQuery({
-    queryKey: categoryKeys.subcategories(categoryId),
-    queryFn: () => CategoryService.getSubcategoriesByCategory(categoryId),
-    enabled: !!categoryId,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
+  return useSubcategories({ categoryId });
 }
 
 /**
@@ -172,7 +188,9 @@ export function useCreateSubcategory() {
       CategoryService.createSubcategory(categoryId, data),
     onSuccess: (newSubcategory, { categoryId }) => {
       // Invalidate subcategories list for the parent category
-      queryClient.invalidateQueries({ queryKey: categoryKeys.subcategories(categoryId) });
+      queryClient.invalidateQueries({
+        queryKey: categoryKeys.subcategories({ categoryId }),
+      });
       queryClient.invalidateQueries({ queryKey: categoryKeys.withSubcategories() });
 
       // Add the new subcategory to cache
@@ -204,12 +222,11 @@ export function useUpdateSubcategory() {
       // Update the specific subcategory in cache
       queryClient.setQueryData(categoryKeys.subcategory(subcategoryId), updatedSubcategory);
 
-      // Invalidate related queries
-      if (updatedSubcategory.categoryId) {
-        queryClient.invalidateQueries({
-          queryKey: categoryKeys.subcategories(updatedSubcategory.categoryId),
-        });
-      }
+      // Invalidate subcategories lists
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          query.queryKey[0] === 'categories' && query.queryKey[1] === 'subcategories',
+      });
       queryClient.invalidateQueries({ queryKey: categoryKeys.withSubcategories() });
 
       console.log('Subcategory updated successfully:', updatedSubcategory);
@@ -229,20 +246,14 @@ export function useDeleteSubcategory() {
   return useMutation({
     mutationFn: (subcategoryId: string) => CategoryService.deleteSubcategory(subcategoryId),
     onSuccess: (_, subcategoryId) => {
-      // Get the subcategory data before removing it to know the categoryId
-      const subcategoryData = queryClient.getQueryData<Subcategory>(
-        categoryKeys.subcategory(subcategoryId)
-      );
-
       // Remove the subcategory from cache
       queryClient.removeQueries({ queryKey: categoryKeys.subcategory(subcategoryId) });
 
-      // Invalidate related queries
-      if (subcategoryData?.categoryId) {
-        queryClient.invalidateQueries({
-          queryKey: categoryKeys.subcategories(subcategoryData.categoryId),
-        });
-      }
+      // Invalidate subcategories lists
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          query.queryKey[0] === 'categories' && query.queryKey[1] === 'subcategories',
+      });
       queryClient.invalidateQueries({ queryKey: categoryKeys.withSubcategories() });
 
       console.log('Subcategory deleted successfully');

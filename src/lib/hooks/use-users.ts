@@ -4,6 +4,7 @@ import { UserService } from '../services/user.service';
 
 import type {
   UserFilters,
+  UsersResponse,
   CreateUserRequest,
   UpdateUserRequest,
   UpdateUserProfileRequest,
@@ -34,8 +35,8 @@ export function useUsers(filters?: UserFilters) {
     queryKey: userKeys.list(filters || {}),
     queryFn: () => UserService.getUsers(filters),
     staleTime: 5 * 60 * 1000, // 5 minutes
-    select: (data) => ({
-      users: data.users,
+    select: (data: UsersResponse) => ({
+      users: data.data,
       pagination: data.pagination,
     }),
   });
@@ -207,7 +208,7 @@ export function useUpdateUserRole() {
 // ===== PROFILE HOOKS =====
 
 /**
- * Get current user profile
+ * Get my profile
  */
 export function useMyProfile() {
   return useQuery({
@@ -230,25 +231,16 @@ export function useUserProfile(userId: string) {
 }
 
 /**
- * Update current user profile
+ * Update my profile
  */
 export function useUpdateMyProfile() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
-      data,
-      files,
-    }: {
-      data: UpdateUserProfileRequest;
-      files?: { avatar?: File; cv?: File };
-    }) => UserService.updateMyProfile(data, files),
+    mutationFn: (data: UpdateUserProfileRequest) => UserService.updateMyProfile(data),
     onSuccess: (updatedProfile) => {
-      // Update the profile in cache
+      // Update my profile in cache
       queryClient.setQueryData(userKeys.myProfile(), updatedProfile);
-
-      // Also update in user detail if it exists
-      queryClient.invalidateQueries({ queryKey: userKeys.detail(updatedProfile.userId) });
 
       console.log('Profile updated successfully:', updatedProfile);
     },
@@ -258,27 +250,12 @@ export function useUpdateMyProfile() {
   });
 }
 
-// ===== UTILITY HOOKS =====
-
 /**
- * Export users data (Admin only)
+ * Export users (Admin only)
  */
 export function useExportUsers() {
   return useMutation({
     mutationFn: (filters?: UserFilters) => UserService.exportUsers(filters),
-    onSuccess: (blob) => {
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `users_export_${new Date().toISOString().split('T')[0]}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-
-      console.log('Users exported successfully');
-    },
     onError: (error) => {
       console.error('Failed to export users:', error);
     },

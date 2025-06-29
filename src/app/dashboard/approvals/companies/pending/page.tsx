@@ -1,9 +1,9 @@
 'use client';
 
-import type { Company } from 'src/types/approval';
 import type { GridColDef } from '@mui/x-data-grid';
+import type { Company, CompanyFilters } from 'src/types/approval';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
@@ -37,6 +37,8 @@ import { LoadingScreen } from 'src/components/loading-screen';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 import CustomDataGrid from 'src/components/data-grid/custom-datagrid';
 
+import { DEFAULT_PAGE, DEFAULT_LIMIT } from 'src/types/common';
+
 // ----------------------------------------------------------------------
 
 export default function PendingCompaniesPage() {
@@ -46,10 +48,36 @@ export default function PendingCompaniesPage() {
   const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [filters, setFilters] = useState<CompanyFilters>({
+    page: DEFAULT_PAGE,
+    limit: DEFAULT_LIMIT,
+    sortBy: 'createdAt',
+    sortOrder: 'desc',
+    approvalStatus: 'PENDING',
+  });
 
-  const { data: companies = [], isLoading, error } = usePendingCompanies();
+  const { data, isLoading, error } = usePendingCompanies(filters);
+  const companies = data?.companies || [];
+  const pagination = data?.pagination;
+
   const approveCompanyMutation = useApproveCompany();
   const rejectCompanyMutation = useRejectCompany();
+
+  const handlePaginationChange = useCallback((page: number, pageSize: number) => {
+    setFilters((prev) => ({
+      ...prev,
+      page,
+      limit: pageSize,
+    }));
+  }, []);
+
+  const handleSortChange = useCallback((sortBy: string, sortOrder: 'asc' | 'desc') => {
+    setFilters((prev) => ({
+      ...prev,
+      sortBy,
+      sortOrder,
+    }));
+  }, []);
 
   const handleApprove = async (company: Company) => {
     setSelectedCompany(company);
@@ -199,7 +227,6 @@ export default function PendingCompaniesPage() {
               selectedCompany?.id === params.row.id &&
               params.row.approvalStatus === 'PENDING'
             }
-            showInMenu
           />,
           <GridActionsCellItem
             icon={<Iconify icon="eva:close-fill" />}
@@ -210,12 +237,18 @@ export default function PendingCompaniesPage() {
               selectedCompany?.id === params.row.id &&
               params.row.approvalStatus === 'PENDING'
             }
-            showInMenu
           />,
         ],
       },
     ],
-    [approveCompanyMutation.isPending, rejectCompanyMutation.isPending, selectedCompany?.id]
+    [
+      approveCompanyMutation.isPending,
+      rejectCompanyMutation.isPending,
+      selectedCompany?.id,
+      handleView,
+      handleApprove,
+      handleReject,
+    ]
   );
 
   if (isLoading) {
@@ -225,20 +258,16 @@ export default function PendingCompaniesPage() {
   if (error) {
     return (
       <DashboardContent>
-        <EmptyContent
-          filled
-          title="Error Loading Companies"
-          description="Failed to load pending companies. Please try again."
-          action={
-            <Button
-              variant="contained"
-              onClick={() => window.location.reload()}
-              startIcon={<Iconify icon="eva:refresh-fill" />}
-            >
-              Retry
-            </Button>
-          }
+        <CustomBreadcrumbs
+          heading="Pending Company Approvals"
+          links={[
+            { name: 'Dashboard', href: paths.dashboard.root },
+            { name: 'Approvals', href: paths.dashboard.approvals.root },
+            { name: 'Companies' },
+          ]}
+          sx={{ mb: { xs: 3, md: 5 } }}
         />
+        <EmptyContent title="Error" description="Failed to load companies" />
       </DashboardContent>
     );
   }
@@ -246,41 +275,46 @@ export default function PendingCompaniesPage() {
   return (
     <DashboardContent>
       <CustomBreadcrumbs
-        heading="Pending Companies"
+        heading="Pending Company Approvals"
         links={[
           { name: 'Dashboard', href: paths.dashboard.root },
           { name: 'Approvals', href: paths.dashboard.approvals.root },
-          { name: 'Companies', href: paths.dashboard.approvals.companies.root },
-          { name: 'Pending' },
+          { name: 'Companies' },
         ]}
-        action={
-          <Button
-            variant="contained"
-            startIcon={<Iconify icon="mingcute:add-line" />}
-            onClick={() => router.push(paths.dashboard.approvals.companies.all)}
-          >
-            View All Companies
-          </Button>
-        }
         sx={{ mb: { xs: 3, md: 5 } }}
       />
 
-      <Card sx={{ height: 600, width: '100%' }}>
-        <CustomDataGrid data={companies} columns={columns} loading={isLoading} />
+      <Card>
+        <Box sx={{ height: 600, width: '100%' }}>
+          <CustomDataGrid
+            data={companies}
+            columns={columns}
+            loading={isLoading}
+            serverSide
+            pagination={pagination}
+            onPaginationChange={handlePaginationChange}
+            onSortChange={handleSortChange}
+          />
+        </Box>
       </Card>
 
       {/* Approve Confirmation Dialog */}
       <ConfirmDialog
         open={approveConfirmOpen}
-        onClose={() => {
-          setApproveConfirmOpen(false);
-          setSelectedCompany(null);
-        }}
+        onClose={() => setApproveConfirmOpen(false)}
         title="Approve Company"
         content={
-          selectedCompany
-            ? `Are you sure you want to approve "${selectedCompany.name}"? This action cannot be undone and the company will be able to post jobs.`
-            : ''
+          selectedCompany && (
+            <Box>
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                Are you sure you want to approve <strong>{selectedCompany.name}</strong>?
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Once approved, this company will be able to post job listings and manage their
+                company profile.
+              </Typography>
+            </Box>
+          )
         }
         action={
           <LoadingButton
@@ -298,20 +332,29 @@ export default function PendingCompaniesPage() {
       {/* Reject Dialog */}
       <Dialog
         open={rejectDialogOpen}
-        onClose={() => {
-          setRejectDialogOpen(false);
-          setRejectionReason('');
-          setSelectedCompany(null);
-        }}
+        onClose={() => setRejectDialogOpen(false)}
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Reject Company</DialogTitle>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Iconify icon="eva:close-fill" sx={{ color: 'error.main' }} />
+            Reject Company
+          </Box>
+        </DialogTitle>
+
         <DialogContent>
-          <Typography variant="body2" sx={{ mb: 3 }}>
-            {selectedCompany &&
-              `Are you sure you want to reject "${selectedCompany.name}"? Please provide a detailed reason for rejection.`}
-          </Typography>
+          {selectedCompany && (
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="body1" sx={{ mb: 1 }}>
+                You are about to reject <strong>{selectedCompany.name}</strong>.
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Please provide a clear reason for rejection. This will be sent to the company.
+              </Typography>
+            </Box>
+          )}
+
           <TextField
             fullWidth
             multiline
@@ -319,25 +362,19 @@ export default function PendingCompaniesPage() {
             label="Rejection Reason"
             value={rejectionReason}
             onChange={(e) => setRejectionReason(e.target.value)}
-            placeholder="Please explain why this company is being rejected..."
-            helperText="This reason will be sent to the company owner and they will not be able to post jobs."
+            placeholder="Please provide a detailed reason for rejection..."
+            required
           />
         </DialogContent>
+
         <DialogActions>
-          <Button
-            onClick={() => {
-              setRejectDialogOpen(false);
-              setRejectionReason('');
-              setSelectedCompany(null);
-            }}
-          >
-            Cancel
-          </Button>
+          <Button onClick={() => setRejectDialogOpen(false)}>Cancel</Button>
           <LoadingButton
             variant="contained"
             color="error"
             onClick={confirmReject}
             loading={rejectCompanyMutation.isPending}
+            disabled={!rejectionReason.trim()}
             startIcon={<Iconify icon="eva:close-fill" />}
           >
             Reject Company

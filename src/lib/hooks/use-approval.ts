@@ -1,6 +1,12 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type {
+  JobFilters,
+  JobsResponse,
+  CompanyFilters,
+  RejectionRequest,
+  CompaniesResponse,
+} from 'src/types/approval';
 
-import type { Company, Job, RejectionRequest } from 'src/types/approval';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { ApprovalService } from '../services/approval.service';
 
@@ -11,12 +17,15 @@ export const approvalKeys = {
   all: ['approvals'] as const,
   companies: {
     all: ['approvals', 'companies'] as const,
-    pending: ['approvals', 'companies', 'pending'] as const,
+    list: (filters: CompanyFilters) => ['approvals', 'companies', 'list', { filters }] as const,
+    pending: (filters?: CompanyFilters) =>
+      ['approvals', 'companies', 'pending', { filters }] as const,
     details: (id: string) => ['approvals', 'companies', 'details', id] as const,
   },
   jobs: {
     all: ['approvals', 'jobs'] as const,
-    pending: ['approvals', 'jobs', 'pending'] as const,
+    list: (filters: JobFilters) => ['approvals', 'jobs', 'list', { filters }] as const,
+    pending: (filters?: JobFilters) => ['approvals', 'jobs', 'pending', { filters }] as const,
     details: (id: string) => ['approvals', 'jobs', 'details', id] as const,
   },
 } as const;
@@ -24,19 +33,29 @@ export const approvalKeys = {
 // ----------------------------------------------------------------------
 
 // Company Hooks
-export function usePendingCompanies() {
+export function usePendingCompanies(filters?: CompanyFilters) {
+  const pendingFilters = { ...filters, approvalStatus: 'PENDING' as const };
+
   return useQuery({
-    queryKey: approvalKeys.companies.pending,
-    queryFn: ApprovalService.getPendingCompanies,
+    queryKey: approvalKeys.companies.pending(filters),
+    queryFn: () => ApprovalService.getCompanies(pendingFilters),
     staleTime: 1000 * 60 * 5, // 5 minutes
+    select: (data: CompaniesResponse) => ({
+      companies: data.data,
+      pagination: data.pagination,
+    }),
   });
 }
 
-export function useAllCompanies() {
+export function useAllCompanies(filters?: CompanyFilters) {
   return useQuery({
-    queryKey: approvalKeys.companies.all,
-    queryFn: ApprovalService.getAllCompanies,
+    queryKey: approvalKeys.companies.list(filters || {}),
+    queryFn: () => ApprovalService.getCompanies(filters),
     staleTime: 1000 * 60 * 5, // 5 minutes
+    select: (data: CompaniesResponse) => ({
+      companies: data.data,
+      pagination: data.pagination,
+    }),
   });
 }
 
@@ -57,7 +76,6 @@ export function useApproveCompany() {
     onSuccess: () => {
       // Invalidate and refetch approval queries
       queryClient.invalidateQueries({ queryKey: approvalKeys.companies.all });
-      queryClient.invalidateQueries({ queryKey: approvalKeys.companies.pending });
     },
     onError: (error) => {
       console.error('Failed to approve company:', error);
@@ -74,7 +92,6 @@ export function useRejectCompany() {
     onSuccess: () => {
       // Invalidate and refetch approval queries
       queryClient.invalidateQueries({ queryKey: approvalKeys.companies.all });
-      queryClient.invalidateQueries({ queryKey: approvalKeys.companies.pending });
     },
     onError: (error) => {
       console.error('Failed to reject company:', error);
@@ -83,19 +100,29 @@ export function useRejectCompany() {
 }
 
 // Job Hooks
-export function usePendingJobs() {
+export function usePendingJobs(filters?: JobFilters) {
+  const pendingFilters = { ...filters, approvalStatus: 'PENDING' as const };
+
   return useQuery({
-    queryKey: approvalKeys.jobs.pending,
-    queryFn: ApprovalService.getPendingJobs,
+    queryKey: approvalKeys.jobs.pending(filters),
+    queryFn: () => ApprovalService.getJobs(pendingFilters),
     staleTime: 1000 * 60 * 5, // 5 minutes
+    select: (data: JobsResponse) => ({
+      jobs: data.data,
+      pagination: data.pagination,
+    }),
   });
 }
 
-export function useAllJobs() {
+export function useAllJobs(filters?: JobFilters) {
   return useQuery({
-    queryKey: approvalKeys.jobs.all,
-    queryFn: ApprovalService.getAllJobs,
+    queryKey: approvalKeys.jobs.list(filters || {}),
+    queryFn: () => ApprovalService.getJobs(filters),
     staleTime: 1000 * 60 * 5, // 5 minutes
+    select: (data: JobsResponse) => ({
+      jobs: data.data,
+      pagination: data.pagination,
+    }),
   });
 }
 
@@ -116,7 +143,6 @@ export function useApproveJob() {
     onSuccess: () => {
       // Invalidate and refetch approval queries
       queryClient.invalidateQueries({ queryKey: approvalKeys.jobs.all });
-      queryClient.invalidateQueries({ queryKey: approvalKeys.jobs.pending });
     },
     onError: (error) => {
       console.error('Failed to approve job:', error);
@@ -133,7 +159,6 @@ export function useRejectJob() {
     onSuccess: () => {
       // Invalidate and refetch approval queries
       queryClient.invalidateQueries({ queryKey: approvalKeys.jobs.all });
-      queryClient.invalidateQueries({ queryKey: approvalKeys.jobs.pending });
     },
     onError: (error) => {
       console.error('Failed to reject job:', error);
