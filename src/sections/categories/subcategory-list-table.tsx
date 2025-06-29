@@ -1,25 +1,20 @@
 'use client';
 
+import type { GridColDef } from '@mui/x-data-grid';
 import type { Subcategory } from 'src/types/category';
 
-import { useState, useCallback } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 
 import {
   Box,
-  Card,
-  Table,
+  Chip,
   Select,
   Tooltip,
-  TableRow,
   MenuItem,
-  TableBody,
-  TableCell,
-  TableHead,
   IconButton,
   Typography,
   InputLabel,
   FormControl,
-  TableContainer,
   CircularProgress,
 } from '@mui/material';
 
@@ -30,8 +25,8 @@ import {
 } from 'src/lib/hooks/use-categories';
 
 import { Iconify } from 'src/components/iconify';
-import { Scrollbar } from 'src/components/scrollbar';
 import { ConfirmDialog } from 'src/components/custom-dialog';
+import CustomDataGrid from 'src/components/data-grid/custom-datagrid';
 
 import { SubcategoryEditDialog } from './subcategory-edit-dialog';
 
@@ -70,6 +65,70 @@ export function SubcategoryListTable() {
     }
   }, [deletingSubcategoryId, deleteSubcategory]);
 
+  const columns: GridColDef<Subcategory>[] = useMemo(
+    () => [
+      {
+        field: 'name',
+        headerName: 'Name',
+        flex: 1,
+        minWidth: 200,
+        renderCell: (params) => (
+          <Typography variant="subtitle2" sx={{ fontWeight: 500 }}>
+            {params.value}
+          </Typography>
+        ),
+      },
+      {
+        field: 'category',
+        headerName: 'Category',
+        width: 200,
+        renderCell: (params) => (
+          <Chip
+            size="small"
+            label={params.row.category?.name || 'N/A'}
+            color="secondary"
+            variant="soft"
+          />
+        ),
+      },
+      {
+        field: 'createdAt',
+        headerName: 'Created At',
+        width: 150,
+        renderCell: (params) => (
+          <Typography variant="body2" color="text.secondary">
+            {new Date(params.value).toLocaleDateString()}
+          </Typography>
+        ),
+      },
+      {
+        field: 'actions',
+        headerName: 'Actions',
+        width: 120,
+        align: 'center',
+        headerAlign: 'center',
+        sortable: false,
+        filterable: false,
+        renderCell: (params) => (
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            <Tooltip title="Edit subcategory">
+              <IconButton size="small" color="default" onClick={() => handleEdit(params.row)}>
+                <Iconify icon="solar:pen-bold" width={18} />
+              </IconButton>
+            </Tooltip>
+
+            <Tooltip title="Delete subcategory">
+              <IconButton size="small" color="error" onClick={() => handleDelete(params.row.id)}>
+                <Iconify icon="solar:trash-bin-trash-bold" width={18} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        ),
+      },
+    ],
+    [handleEdit, handleDelete]
+  );
+
   const renderCategorySelector = (
     <Box sx={{ mb: 3 }}>
       <FormControl fullWidth>
@@ -95,91 +154,50 @@ export function SubcategoryListTable() {
   const renderContent = () => {
     if (!selectedCategoryId) {
       return (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-          <Typography color="text.secondary">
-            Please select a category to view its subcategories
-          </Typography>
-        </Box>
-      );
-    }
-
-    if (isLoading) {
-      return (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-          <CircularProgress />
+        <Box
+          sx={{
+            height: 400,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '1px dashed',
+            borderColor: 'divider',
+            borderRadius: 1,
+          }}
+        >
+          <Box sx={{ textAlign: 'center' }}>
+            <Iconify
+              icon="solar:folder-open-bold-duotone"
+              width={48}
+              sx={{ color: 'text.disabled', mb: 2 }}
+            />
+            <Typography color="text.secondary">
+              Please select a category to view its subcategories
+            </Typography>
+          </Box>
         </Box>
       );
     }
 
     if (error) {
       return (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+        <Box
+          sx={{
+            height: 400,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
           <Typography color="error">Failed to load subcategories</Typography>
         </Box>
       );
     }
 
     return (
-      <Scrollbar>
-        <TableContainer sx={{ minWidth: 600 }}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Category</TableCell>
-                <TableCell>Created At</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-
-            <TableBody>
-              {subcategories.map((subcategory) => (
-                <TableRow key={subcategory.id} hover>
-                  <TableCell>
-                    <Typography variant="subtitle2">{subcategory.name}</Typography>
-                  </TableCell>
-
-                  <TableCell>
-                    <Typography variant="body2" color="text.secondary">
-                      {subcategory.category?.name || 'N/A'}
-                    </Typography>
-                  </TableCell>
-
-                  <TableCell>
-                    <Typography variant="body2" color="text.secondary">
-                      {new Date(subcategory.createdAt).toLocaleDateString()}
-                    </Typography>
-                  </TableCell>
-
-                  <TableCell align="right">
-                    <Tooltip title="Edit subcategory">
-                      <IconButton color="default" onClick={() => handleEdit(subcategory)}>
-                        <Iconify icon="solar:pen-bold" />
-                      </IconButton>
-                    </Tooltip>
-
-                    <Tooltip title="Delete subcategory">
-                      <IconButton color="error" onClick={() => handleDelete(subcategory.id)}>
-                        <Iconify icon="solar:trash-bin-trash-bold" />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              ))}
-
-              {subcategories.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} align="center">
-                    <Typography variant="body2" color="text.secondary">
-                      No subcategories found for this category
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Scrollbar>
+      <Box sx={{ width: '100%' }}>
+        <CustomDataGrid data={subcategories} columns={columns} loading={isLoading} />
+      </Box>
     );
   };
 
@@ -187,7 +205,7 @@ export function SubcategoryListTable() {
     <>
       <Box sx={{ p: 3 }}>
         {renderCategorySelector}
-        <Card>{renderContent()}</Card>
+        {renderContent()}
       </Box>
 
       {/* Edit Dialog */}

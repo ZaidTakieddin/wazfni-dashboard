@@ -2,12 +2,15 @@
 
 import { useState } from 'react';
 
-import { Box, Tab, Card, Tabs, Button, Typography } from '@mui/material';
+import { Box, Tab, Card, Tabs, Button } from '@mui/material';
+
+import { paths } from 'src/routes/paths';
 
 import { DashboardContent } from 'src/layouts/dashboard';
 
 import { Iconify } from 'src/components/iconify';
 import { useSettingsContext } from 'src/components/settings';
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 import { CategoryListTable } from '../category-list-table';
 import { CategoryCreateDialog } from '../category-create-dialog';
@@ -28,13 +31,7 @@ export function CategoryManagementView() {
   };
 
   const renderTabs = (
-    <Tabs
-      value={currentTab}
-      onChange={handleTabChange}
-      sx={{
-        mb: { xs: 3, md: 5 },
-      }}
-    >
+    <Tabs value={currentTab} onChange={handleTabChange}>
       <Tab
         label="Categories"
         value="categories"
@@ -75,13 +72,15 @@ export function CategoryManagementView() {
 
   return (
     <DashboardContent>
-      <Typography variant="h4" sx={{ mb: { xs: 3, md: 5 } }}>
-        Category Management
-      </Typography>
+      <CustomBreadcrumbs
+        heading="Category Management"
+        links={[{ name: 'Dashboard', href: paths.dashboard.root }, { name: 'Categories' }]}
+        action={renderActions}
+        sx={{ mb: { xs: 3, md: 5 } }}
+      />
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         {renderTabs}
-        {renderActions}
       </Box>
 
       <Card>
