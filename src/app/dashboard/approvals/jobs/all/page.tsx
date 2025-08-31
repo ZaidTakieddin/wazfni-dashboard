@@ -1,36 +1,36 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { GridActionsCellItem, GridColDef } from '@mui/x-data-grid';
+import type { Job } from 'src/types/approval';
+import type { GridColDef } from '@mui/x-data-grid';
 
-import Box from '@mui/material/Box';
+import { useMemo, useState, useCallback } from 'react';
+
 import Card from '@mui/material/Card';
 import Chip from '@mui/material/Chip';
+import { Stack } from '@mui/material';
 import Button from '@mui/material/Button';
+import Dialog from '@mui/material/Dialog';
+import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import LoadingButton from '@mui/lab/LoadingButton';
-import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
+import { GridActionsCellItem } from '@mui/x-data-grid';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
-import TextField from '@mui/material/TextField';
 
 import { paths } from 'src/routes/paths';
 import { useRouter } from 'src/routes/hooks';
 
+import { DashboardContent } from 'src/layouts/dashboard';
+import { useAllJobs, useRejectJob, useApproveJob } from 'src/lib/hooks/use-approval';
+
 import { Label } from 'src/components/label';
 import { Iconify } from 'src/components/iconify';
 import { EmptyContent } from 'src/components/empty-content';
+import { ConfirmDialog } from 'src/components/custom-dialog';
 import { LoadingScreen } from 'src/components/loading-screen';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
-import { ConfirmDialog } from 'src/components/custom-dialog';
 import CustomDataGrid from 'src/components/data-grid/custom-datagrid';
-
-import type { Job } from 'src/types/approval';
-import { useAllJobs, useApproveJob, useRejectJob } from 'src/lib/hooks/use-approval';
-
-import { DashboardContent } from 'src/layouts/dashboard';
-import { Stack } from '@mui/material';
 
 // ----------------------------------------------------------------------
 
@@ -42,23 +42,28 @@ export default function AllJobsPage() {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
 
-  const { data: jobs = [], isLoading, error } = useAllJobs();
+  const { data, isLoading, error } = useAllJobs();
+  const jobs = data?.jobs || [];
+  const pagination = data?.pagination;
   const approveJobMutation = useApproveJob();
   const rejectJobMutation = useRejectJob();
 
-  const handleApprove = async (job: Job) => {
+  const handleApprove = useCallback(async (job: Job) => {
     setSelectedJob(job);
     setApproveConfirmOpen(true);
-  };
+  }, []);
 
-  const handleReject = async (job: Job) => {
+  const handleReject = useCallback(async (job: Job) => {
     setSelectedJob(job);
     setRejectDialogOpen(true);
-  };
+  }, []);
 
-  const handleView = (job: Job) => {
-    router.push(paths.dashboard.approvals.jobs.details(job.id));
-  };
+  const handleView = useCallback(
+    (job: Job) => {
+      router.push(paths.dashboard.approvals.jobs.details(job.id));
+    },
+    [router]
+  );
 
   const confirmApprove = async () => {
     if (!selectedJob) return;
@@ -68,8 +73,8 @@ export default function AllJobsPage() {
       console.log('Job approved successfully!');
       setApproveConfirmOpen(false);
       setSelectedJob(null);
-    } catch (error: any) {
-      console.error('Failed to approve job:', error?.message || error);
+    } catch (approveError: any) {
+      console.error('Failed to approve job:', approveError?.message || approveError);
     }
   };
 
@@ -88,8 +93,8 @@ export default function AllJobsPage() {
       setRejectDialogOpen(false);
       setRejectionReason('');
       setSelectedJob(null);
-    } catch (error: any) {
-      console.error('Failed to reject job:', error?.message || error);
+    } catch (rejectError: any) {
+      console.error('Failed to reject job:', rejectError?.message || rejectError);
     }
   };
 
@@ -225,7 +230,7 @@ export default function AllJobsPage() {
               selectedJob?.id === params.row.id &&
               params.row.approvalStatus === 'PENDING'
             }
-            showInMenu={true}
+            showInMenu
           />,
 
           <GridActionsCellItem
@@ -237,12 +242,19 @@ export default function AllJobsPage() {
               selectedJob?.id === params.row.id &&
               params.row.approvalStatus === 'PENDING'
             }
-            showInMenu={true}
+            showInMenu
           />,
         ],
       },
     ],
-    [approveJobMutation.isPending, rejectJobMutation.isPending, selectedJob?.id]
+    [
+      approveJobMutation.isPending,
+      rejectJobMutation.isPending,
+      selectedJob?.id,
+      handleView,
+      handleApprove,
+      handleReject,
+    ]
   );
 
   if (isLoading) {
@@ -293,7 +305,13 @@ export default function AllJobsPage() {
       />
 
       <Card sx={{ height: 600, width: '100%' }}>
-        <CustomDataGrid data={jobs} columns={columns} loading={isLoading} />
+        <CustomDataGrid
+          data={jobs}
+          columns={columns}
+          loading={isLoading}
+          pagination={pagination}
+          serverSide={false}
+        />
       </Card>
 
       {/* Approve Confirmation Dialog */}

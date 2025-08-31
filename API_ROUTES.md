@@ -31,23 +31,28 @@ Authorization: Bearer <your_jwt_token>
 
 ---
 
-## 📄 **Pagination**
+## 📄 **Pagination (Optional)**
 
-All list endpoints support pagination with the following query parameters:
+All list endpoints support **optional pagination**. You can choose between:
 
-### **Standard Pagination Parameters**
+- **Paginated**: Include `page` and/or `limit` parameters to get paginated results
+- **Unpaginated**: Omit pagination parameters to get all results at once
+
+### **Pagination Parameters**
 
 - `page` (optional): Page number (default: 1, minimum: 1)
 - `limit` (optional): Items per page (default: 10, minimum: 1, maximum: 100)
 - `sortBy` (optional): Sort field (varies by endpoint, see specific endpoint documentation)
 - `sortOrder` (optional): Sort direction - `asc` or `desc` (default: desc)
 
-### **Standard Pagination Response**
+### **Response Formats**
 
-All paginated endpoints return data in this format:
+**Paginated Response** (when pagination parameters are provided):
 
 ```json
 {
+  "success": true,
+  "message": "Data retrieved successfully",
   "data": [...],
   "pagination": {
     "page": 1,
@@ -58,6 +63,30 @@ All paginated endpoints return data in this format:
     "hasPrev": false
   }
 }
+```
+
+**Unpaginated Response** (when no pagination parameters are provided):
+
+```json
+{
+  "success": true,
+  "message": "Data retrieved successfully",
+  "data": [...]
+}
+```
+
+### **Examples**
+
+**Get paginated jobs:**
+
+```
+GET /api/v1/jobs?page=1&limit=10&sortBy=createdAt&sortOrder=desc
+```
+
+**Get all jobs (no pagination):**
+
+```
+GET /api/v1/jobs
 ```
 
 ---
@@ -130,6 +159,53 @@ All paginated endpoints return data in this format:
 - **Endpoint:** `/logout`
 - **Auth Required:** ✅ Yes
 - **Body:** Empty
+
+### **Forgot Password**
+
+- **Method:** `POST`
+- **Endpoint:** `/forgot-password`
+- **Auth Required:** ❌ No
+- **Body:**
+
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+- **Response:**
+
+```json
+{
+  "message": "If an account with that email exists, a password reset link has been sent."
+}
+```
+
+**Note:** For security reasons, the same message is returned regardless of whether the email exists or not.
+
+### **Reset Password**
+
+- **Method:** `POST`
+- **Endpoint:** `/reset-password`
+- **Auth Required:** ❌ No
+- **Body:**
+
+```json
+{
+  "token": "reset_token_from_email",
+  "newPassword": "newPassword123"
+}
+```
+
+- **Response:**
+
+```json
+{
+  "message": "Password has been reset successfully"
+}
+```
+
+**Note:** The reset token is provided in the email sent by the forgot password endpoint. Tokens expire after 1 hour and can only be used once.
 
 ---
 
@@ -490,18 +566,80 @@ All paginated endpoints return data in this format:
 
 - **Method:** `GET`
 - **Endpoint:** `/search`
-- **Auth Required:** ❌ No
+- **Auth Required:** ❌ No (Optional: Include auth token to get bookmark status)
 - **Query Parameters:**
   - **Pagination:** `page`, `limit`, `sortOrder`
   - `sortBy` (optional): `createdAt`, `updatedAt`, `jobTitle`, `workType`, `contractType`, `experienceLevel`, `minSalary`, `maxSalary` (default: createdAt)
-  - `q` (optional): Search query
+  - `searchTerm` (optional): Search query across job title, description, requirements, and company name
+  - `title` (optional): Filter by job title (partial match)
+  - `city` (optional): Filter by company city (partial match)
   - `subCategory` (optional): Filter by subcategory name (partial match)
   - `subCategoryId` (optional): Filter by specific subcategory ID (exact match)
-  - `workType` (optional): Work type filter
-  - `contractType` (optional): Contract type filter
-  - `experienceLevel` (optional): Experience level filter
-  - `minSalary` (optional): Minimum salary
-  - `maxSalary` (optional): Maximum salary
+  - `categoryId` (optional): Filter by category ID (exact match)
+  - `companyName` (optional): Filter by company name (partial match)
+  - `workType` (optional): Work type filter (comma-separated for multiple values, e.g., "FULL_TIME,PART_TIME")
+
+**Examples:**
+
+```
+# Search for software jobs in Cairo
+GET /api/v1/jobs/search?searchTerm=software&city=cairo
+
+# Filter by category
+GET /api/v1/jobs/search?categoryId=tech_category_id
+
+# Filter by subcategory
+GET /api/v1/jobs/search?subCategoryId=web_dev_subcategory_id
+
+# Filter by work type
+GET /api/v1/jobs/search?workType=FULL_TIME,REMOTE
+
+# Search with pagination
+GET /api/v1/jobs/search?page=1&limit=10&sortBy=createdAt&sortOrder=desc
+
+# Search with authentication (includes bookmark status)
+GET /api/v1/jobs/search?searchTerm=developer
+Authorization: Bearer <your_token>
+```
+
+**Response:**
+
+```json
+[
+  {
+    "id": "job_id",
+    "jobTitle": "Senior Software Engineer",
+    "description": "We are looking for a senior developer...",
+    "requirements": "5+ years of experience...",
+    "workType": "FULL_TIME",
+    "contractType": "REMOTE",
+    "experienceLevel": "SENIOR",
+    "minSalary": 5000,
+    "maxSalary": 8000,
+    "currency": "USD",
+    "salaryType": "RANGE",
+    "isBookmarked": true, // Only included if user is authenticated
+    "company": {
+      "id": "company_id",
+      "name": "Tech Company",
+      "city": "Cairo"
+    },
+    "subCategories": [
+      {
+        "id": "subcategory_id",
+        "name": "Web Development",
+        "category": {
+          "id": "category_id",
+          "name": "Technology"
+        }
+      }
+    ],
+    "_count": {
+      "applications": 15
+    }
+  }
+]
+```
 
 ### **Create Job Post**
 
@@ -888,12 +1026,12 @@ All paginated endpoints return data in this format:
 
 ---
 
-## 🔔 **Firebase Notification Routes**
+## 🔔 **Push Notification Routes (Expo)**
 
 **Base Path:** `/api/v1/fcm`
 **Auth Required:** ✅ Yes
 
-### **Register FCM Token**
+### **Register Expo Push Token**
 
 - **Method:** `POST`
 - **Endpoint:** `/register`
@@ -901,11 +1039,20 @@ All paginated endpoints return data in this format:
 
 ```json
 {
-  "token": "fcm_token_here"
+  "token": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]"
 }
 ```
 
-### **Remove FCM Token**
+- **Response:**
+
+```json
+{
+  "success": true,
+  "message": "تم تسجيل رمز الإشعارات بنجاح"
+}
+```
+
+### **Remove Expo Push Token**
 
 - **Method:** `POST`
 - **Endpoint:** `/remove`
@@ -913,9 +1060,35 @@ All paginated endpoints return data in this format:
 
 ```json
 {
-  "token": "fcm_token_here"
+  "token": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]"
 }
 ```
+
+- **Response:**
+
+```json
+{
+  "success": true,
+  "message": "تم حذف رمز الإشعارات بنجاح"
+}
+```
+
+### **Test Push Notification (Development)**
+
+- **Method:** `POST`
+- **Endpoint:** `/test`
+- **Body:** None
+
+- **Response:**
+
+```json
+{
+  "success": true,
+  "message": "تم إرسال الإشعار التجريبي بنجاح"
+}
+```
+
+**Note:** This endpoint sends a test notification to the authenticated user. It requires the user to have a registered Expo push token.
 
 ---
 

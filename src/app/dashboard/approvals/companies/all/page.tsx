@@ -1,36 +1,37 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { GridColDef, GridActionsCellItem } from '@mui/x-data-grid';
+import type { Company } from 'src/types/approval';
+import type { GridColDef } from '@mui/x-data-grid';
 
-import Stack from '@mui/material/Stack';
+import { useMemo, useState, useCallback } from 'react';
+
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
+import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
 import Avatar from '@mui/material/Avatar';
+import Dialog from '@mui/material/Dialog';
+import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import LoadingButton from '@mui/lab/LoadingButton';
-import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
+import { GridActionsCellItem } from '@mui/x-data-grid';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
-import TextField from '@mui/material/TextField';
 
 import { paths } from 'src/routes/paths';
 import { useRouter } from 'src/routes/hooks';
 
+import { DashboardContent } from 'src/layouts/dashboard';
+import { useAllCompanies, useRejectCompany, useApproveCompany } from 'src/lib/hooks/use-approval';
+
 import { Label } from 'src/components/label';
 import { Iconify } from 'src/components/iconify';
 import { EmptyContent } from 'src/components/empty-content';
+import { ConfirmDialog } from 'src/components/custom-dialog';
 import { LoadingScreen } from 'src/components/loading-screen';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
-import { ConfirmDialog } from 'src/components/custom-dialog';
 import CustomDataGrid from 'src/components/data-grid/custom-datagrid';
-
-import type { Company } from 'src/types/approval';
-import { useAllCompanies, useApproveCompany, useRejectCompany } from 'src/lib/hooks/use-approval';
-
-import { DashboardContent } from 'src/layouts/dashboard';
 
 // ----------------------------------------------------------------------
 
@@ -42,23 +43,28 @@ export default function AllCompaniesPage() {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
 
-  const { data: companies = [], isLoading, error } = useAllCompanies();
+  const { data, isLoading, error } = useAllCompanies();
+  const companies = data?.companies || [];
+  const pagination = data?.pagination;
   const approveCompanyMutation = useApproveCompany();
   const rejectCompanyMutation = useRejectCompany();
 
-  const handleApprove = async (company: Company) => {
+  const handleApprove = useCallback(async (company: Company) => {
     setSelectedCompany(company);
     setApproveConfirmOpen(true);
-  };
+  }, []);
 
-  const handleReject = async (company: Company) => {
+  const handleReject = useCallback(async (company: Company) => {
     setSelectedCompany(company);
     setRejectDialogOpen(true);
-  };
+  }, []);
 
-  const handleView = (company: Company) => {
-    router.push(paths.dashboard.approvals.companies.details(company.id));
-  };
+  const handleView = useCallback(
+    (company: Company) => {
+      router.push(paths.dashboard.approvals.companies.details(company.id));
+    },
+    [router]
+  );
 
   const confirmApprove = async () => {
     if (!selectedCompany) return;
@@ -68,8 +74,8 @@ export default function AllCompaniesPage() {
       console.log('Company approved successfully!');
       setApproveConfirmOpen(false);
       setSelectedCompany(null);
-    } catch (error: any) {
-      console.error('Failed to approve company:', error?.message || error);
+    } catch (approveError: any) {
+      console.error('Failed to approve company:', approveError?.message || approveError);
     }
   };
 
@@ -88,8 +94,8 @@ export default function AllCompaniesPage() {
       setRejectDialogOpen(false);
       setRejectionReason('');
       setSelectedCompany(null);
-    } catch (error: any) {
-      console.error('Failed to reject company:', error?.message || error);
+    } catch (rejectError: any) {
+      console.error('Failed to reject company:', rejectError?.message || rejectError);
     }
   };
 
@@ -184,7 +190,7 @@ export default function AllCompaniesPage() {
               (approveCompanyMutation.isPending && selectedCompany?.id === params.row.id) ||
               params.row.approvalStatus === 'APPROVED'
             }
-            showInMenu={true}
+            showInMenu
           />,
           <GridActionsCellItem
             icon={<Iconify icon="eva:close-fill" />}
@@ -194,12 +200,19 @@ export default function AllCompaniesPage() {
               (rejectCompanyMutation.isPending && selectedCompany?.id === params.row.id) ||
               params.row.approvalStatus === 'REJECTED'
             }
-            showInMenu={true}
+            showInMenu
           />,
         ],
       },
     ],
-    [approveCompanyMutation.isPending, rejectCompanyMutation.isPending, selectedCompany?.id]
+    [
+      approveCompanyMutation.isPending,
+      rejectCompanyMutation.isPending,
+      selectedCompany?.id,
+      handleView,
+      handleApprove,
+      handleReject,
+    ]
   );
 
   if (isLoading) {
@@ -250,7 +263,13 @@ export default function AllCompaniesPage() {
       />
 
       <Card sx={{ height: 600, width: '100%' }}>
-        <CustomDataGrid data={companies} columns={columns} loading={isLoading} />
+        <CustomDataGrid
+          data={companies}
+          columns={columns}
+          loading={isLoading}
+          pagination={pagination}
+          serverSide={false}
+        />
       </Card>
 
       {/* Approve Confirmation Dialog */}
